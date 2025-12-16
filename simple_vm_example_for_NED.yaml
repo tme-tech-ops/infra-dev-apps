@@ -1,0 +1,87 @@
+tosca_definitions_version: dell_1_0
+
+description: >
+  This blueprint creates a Virtual Machine on a NativeEdge Endpoint and provides the VM login details.
+
+imports:
+  - dell/types/types.yaml
+  - vm/defenitions.yaml
+  - vm/inputs.yaml
+  - vm/outputs.yaml
+
+
+input_groups:
+  artifact:
+    display_label: Deployment Artifacts
+    collapsible: true
+    index: 0
+    inputs:
+      - poc_os_image_secret
+  vm:
+    display_label: NativeEdge Virtual Machine
+    collapsible: true
+    index: 1
+    inputs:
+      - vm_hostname
+      - vm_user_name
+      - vm_password
+      - vcpus
+      - memory_size
+      - os_disk_size
+      - disk_wrapper
+  device_passthrough:
+    display_label: Device Passthrough
+    collapsible: true
+    index: 2
+    inputs:
+      - use_passthrough
+      - pcie
+      - usb
+      - serial_port_wrapper
+      - gpu
+      - video
+  network:
+    display_label: Network Configuration
+    collapsible: true
+    index: 3
+    inputs:
+      - vnic_0_segment_name
+      - use_dhcp
+      - static_ip
+      - use_gateway
+      - gateway
+      - use_dns
+      - dns
+      - use_nat
+      - port_forward_rules
+      - add_second_nic
+      - vnic_1_segment_name
+      - use_dhcp2
+      - static_ip2
+      - use_dns2
+      - dns2
+      - use_nat2
+      - port_forward_rules2
+
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  target_environment:
+    values:
+      - nativeedge
+  vendor:
+    values:
+      - DELL
+  solution:
+    values:
+      - POC-VM
+  version:
+    values:
+      - "3.2.0"
+
+blueprint_labels:
+  env:
+    values:
+      - ned

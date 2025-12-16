@@ -1,0 +1,118 @@
+tosca_definitions_version: dell_1_0
+
+imports:
+  - dell/types/types.yaml
+  - plugin:edge-plugin
+  - plugin:utilities-plugin?version=>=3.1.3.0
+  - plugin:fabric-plugin?version=>=3.3.2.0
+
+node_templates:
+
+  vm_platform:
+    type: dell.nodes.SharedResource
+    properties:
+      resource_config:
+        deployment:
+          id: { get_input: vm_deployment_id }
+
+  vm_info:
+    type: dell.nodes.Root
+    interfaces:
+      dell.interfaces.lifecycle:
+        create:
+          implementation: vm/scripts/get_target_id.py
+          executor: central_deployment_agent
+          inputs:
+            service_tag: { get_attribute: [vm_platform, capabilities, service_tag] }
+        start:
+          implementation: fabric.fabric_plugin.tasks.run_script
+          inputs:
+            script_path: vm/scripts/get_vm_info.sh
+            fabric_env:
+              host_string:
+                get_attribute: [vm_platform, capabilities, vm_name]
+              user:
+                get_attribute: [vm_platform, capabilities, vm_user_name]
+              key:
+                get_secret: { get_attribute: [vm_platform, capabilities, vm_ssh_private_key] }
+              port: 22
+            proxy_settings:
+              get_attribute: [ SELF, connection_proxy_settings ]
+        preupdate:
+          implementation: vm/scripts/get_target_id.py
+          executor: central_deployment_agent
+          inputs:
+            service_tag: { get_attribute: [vm_platform, capabilities, service_tag] }
+        update:
+          implementation: fabric.fabric_plugin.tasks.run_script
+          inputs:
+            script_path: vm/scripts/get_vm_info.sh
+            fabric_env:
+              host_string:
+                get_attribute: [vm_platform, capabilities, vm_name]
+              user:
+                get_attribute: [vm_platform, capabilities, vm_user_name]
+              key:
+                get_secret: { get_attribute: [vm_platform, capabilities, vm_ssh_private_key] }
+              port: 22
+            proxy_settings:
+                get_attribute: [ SELF, connection_proxy_settings ]
+    relationships:
+       - type: dell.relationships.depends_on
+         target: vm_platform
+
+  install_file_server:
+    type: dell.nodes.Root
+    interfaces:
+      dell.interfaces.lifecycle:
+        create:
+          executor: central_deployment_agent
+          implementation: fabric.fabric_plugin.tasks.run_commands
+          inputs:
+            commands:
+              - git clone -q https://github.com/Chubtoad5/nginx-static-files.git
+              - sudo chmod +x nginx-static-files/install_nginx.sh
+              - sudo -E ./nginx-static-files/install_nginx.sh
+            fabric_env:
+              shell_env:
+                ## Self-Signed Certificate info
+                DURATION_DAYS: { get_input: duration_days }
+                ARTIFACT_COMMON_NAME: { get_input: common_name }
+                COUNTRY: { get_input: country }
+                STATE: { get_input: state }
+                LOCATION: { get_input: location }
+                ORGANIZATION: { get_input: organization }
+                ## Basic Authentication info
+                NGINX_HTUSER: { get_input: nginx_htuser }
+                NGINX_HTPASS: { get_input: nginx_htpass }
+                ## TCP Port and Server titles
+                ENABLE_HTTP_REDIRECT: { get_input: enable_http_redirect }
+                NGINX_PORT: { get_input: nginx_port }
+                BROWSER_TITLE: { get_input: browser_title }
+                BODY_TITLE: { get_input: body_title }
+                ## Scirpt Execution options
+                # INSTALL_SERVER: { get_input: install_server }
+                # UPDATE_SERVER: { get_input: update_server }
+                # DELETE_SERVER: { get_input: delete_server }
+                # OFFLINE_PREP: { get_input: offline_prep }
+                DEBUG: { get_input: nginx_debug }
+                ## Update Params
+                # ADD_OR_UPDATE_USER: { get_input: add_or_update_user}
+                # UPDATE_SSL: { get_input: update_ssl}
+                # GEN_NEW_CERT: { get_input: gen_new_cert}
+                # UPDATE_CERT_PATH: { get_input: update_cert_path}
+                # UPDATE_CERT_KEY_PATH: { get_input: update_cert_key_path}
+                ## Delete Params
+                # DELETE_DATA: { get_input: delete_data}
+              host_string:
+                get_attribute: [vm_platform, capabilities, vm_name]
+              user:
+                get_attribute: [vm_platform, capabilities, vm_user_name]
+              key:
+                get_secret: { get_attribute: [vm_platform, capabilities, vm_ssh_private_key] }
+              port: 22
+            proxy_settings:
+              get_attribute: [ vm_info, connection_proxy_settings ]
+    relationships:
+       - type: dell.relationships.depends_on
+         target: vm_info

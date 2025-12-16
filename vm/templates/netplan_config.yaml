@@ -1,0 +1,31 @@
+network:  
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      dhcp-identifier: mac
+      dhcp4: {{ use_dhcp }} {% if not use_dhcp %}
+      addresses:
+      - {{ static_ip }} {% if use_dns %}
+      nameservers:
+        addresses: {{ dns }} {% endif %} {% if use_gateway %}
+      routes:
+        - to: default
+          via: {{ gateway }} {% endif %} {% endif %} {% if add_second_nic %}
+    enp2s0:
+      dhcp-identifier: mac
+      dhcp4: {{ use_dhcp2 }} {% if not use_dhcp2 %}
+      addresses:
+      - {{ static_ip2 }} {% if use_dns2 %}
+      nameservers:
+        addresses: {{ dns2 }} {% endif %} {% endif %}
+    enp3s0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-routes: false 
+    {% endif %} {% if not add_second_nic %}
+    enp2s0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-routes: false 
+    {% endif %}

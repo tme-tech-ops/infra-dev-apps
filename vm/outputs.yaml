@@ -1,0 +1,38 @@
+capabilities:
+
+  service_tag:
+    description: Service Tag
+    value: { get_property: [vm, vm_config, location] }
+
+  vm_name:
+    description: Virtual Machine Name
+    value: { get_attribute: [vm, vm_details, name] }
+
+  vm_hostname:
+    description: Virtual Machine hostname
+    value: { get_input: vm_hostname }
+
+  vm_ip:
+    description: Virtal Machine IP
+    value:
+      get_attribute: [ vm_info, capabilities, vm_public_ip ]
+
+  vm_user_name:
+    description: Virtual Machine User Name
+    value: { get_input: vm_user_name }
+
+  vm_ssh_private_key:
+    description: Virtual Machine SSH Private Key
+    value:
+      concat:
+        - get_attribute: [ ssh_keys, secret_key_name ]
+        - "_private"
+
+  # endpoint_NAT_ip:
+  #   description: NativeEdge Endpoint Default Host Network IP
+  #   value:
+  #     concat:
+  #       - jmespath:
+  #           - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)
+  #           - get_inventory:
+  #               get_environment_capability: ece_service_tag

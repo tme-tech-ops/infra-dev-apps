@@ -1,0 +1,5 @@
+capabilities:
+
+  nginx_url:
+    description: NGINX web server URL
+    value: { concat: ['https://', { get_input: remote_host }, ':', 443] }

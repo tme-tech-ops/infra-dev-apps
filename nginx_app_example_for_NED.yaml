@@ -1,0 +1,66 @@
+tosca_definitions_version: dell_1_0
+
+description: >
+  This blueprint Deploys an NGINX server to serve static files on an existing POC VM deployment
+
+imports:
+  - dell/types/types.yaml
+  - nginx_app/defenitions.yaml
+  - nginx_app/inputs.yaml
+  - nginx_app/outputs.yaml
+
+
+
+
+input_groups:
+  deployment_target:
+    display_label: Deployment Target
+    collapsible: false
+    index: 0
+    inputs:
+      - vm_deployment_id 
+  nginx_settings:
+    display_label: Nginx Settings
+    collapsible: true
+    index: 1
+    inputs:
+      - nginx_htuser
+      - nginx_htpass
+      - enable_http_redirect
+      - nginx_port
+      - browser_title
+      - body_title
+      - nginx_debug
+  certificate:
+    display_label: Self-Signed Certificate
+    collapsible: true
+    index: 2
+    inputs:
+      - duration_days
+      - common_name
+      - country
+      - state
+      - location
+      - organization
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  target_environment:
+    values:
+      - nativeedge
+  vendor:
+    values:
+      - DELL
+  solution:
+    values:
+      - POC-NGINX
+  version:
+    values:
+      - "3.2.0"
+
+blueprint_labels:
+  env:
+    values:
+      - ned

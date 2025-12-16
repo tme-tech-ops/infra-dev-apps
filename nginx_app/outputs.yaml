@@ -1,0 +1,13 @@
+capabilities:
+
+  nginx_url:
+    description: NGINX web server URL
+    value: { concat: ['https://', { get_attribute: [ vm_platform, capabilities, vm_ip ] }, ':', { get_input: nginx_port }] }
+
+  nginx_username:
+    description: NGINX web server username
+    value: { get_input: nginx_htuser }
+
+  nginx_password:
+    description: NGINX web server password
+    value: { get_input: nginx_htpass }

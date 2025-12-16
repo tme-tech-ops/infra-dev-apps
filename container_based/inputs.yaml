@@ -1,0 +1,112 @@
+inputs:
+  nodered_name:
+    display_label: "Node-Red container name"
+    description: "Name of the Node-Red container"
+    type: string
+    required: false
+    default: "nodered"
+    display:
+      group: container
+      index: 1
+
+  nodered_url:
+    display_label: "Node-Red image URL and tag"
+    description: "URL path and tage of Node-Red image"
+    type: string
+    required: false
+    default: "mirror.gcr.io/nodered/node-red:latest"
+    display:
+      group: container
+      index: 2
+
+  influxdb_name:
+    display_label: "InfluxDB container name"
+    description: "Name of the InfluxDB container"
+    type: string
+    required: false
+    default: "influxdb"
+    display:
+      group: container
+      index: 3
+
+  influxdb_url:
+    display_label: "InfluxDB image URL and tag"
+    description: "URL path and tage of InfluxDB image"
+    type: string
+    required: false
+    default: "mirror.gcr.io/influxdb:latest"
+    display:
+      group: container
+      index: 4
+
+  grafana_name:
+    display_label: "Grafana container name"
+    description: "Name of the Grafana container"
+    type: string
+    required: false
+    default: "grafana"
+    display:
+      group: container
+      index: 5
+
+  grafana_url:
+    display_label: "Grafana image URL and tag"
+    description: "URL path and tage of Grafana image"
+    type: string
+    required: false
+    default: "mirror.gcr.io/grafana/grafana:latest"
+    display:
+      group: container
+      index: 6
+
+  # override_ports:
+  #   display_label: "Override ports"
+  #   description: "Override ports"
+  #   type: boolean
+  #   default: false
+  # nodered_port:
+  #   display_label: "Node-Red port"
+  #   description: "Node-Red port"
+  #   type: string
+  #   only_with: override_ports
+  #   required: false
+  #   default: "1880"
+  # serial_port:
+  #   display_label: "Serial Port"
+  #   description: "Serial port"
+  #   type: string
+  #   required: false
+  #   default: "COM-1"
+  # cpu_limit:
+  #   display_label: "CPU Limit"
+  #   description: "CPU limit"
+  #   type: string
+  #   required: false
+  #   default: "2"
+  # memory_limit:
+  #   display_label: "Memory Limit"
+  #   description: "Memory limit"
+  #   type: string
+  #   required: false
+  #   default: "2G"
+  # memory_reservation:
+  #   display_label: "Memory Reservation"
+  #   description: "Memory reservation"
+  #   type: string
+  #   required: false
+  #   default: "2G"
+
+  # Inputs if registry login is required
+
+  # registry_url:
+  #   display_label: "Registry URL"
+  #   description: "Registry URL"
+  #   type: string
+  # registry_username:
+  #   display_label: "Registry Username"
+  #   description: "Registry username"
+  #   type: string
+  # registry_password:
+  #   display_label: "Registry Password"
+  #   description: "Registry password"
+  #   type: secret_key

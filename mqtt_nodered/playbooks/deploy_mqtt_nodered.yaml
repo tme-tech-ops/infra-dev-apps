@@ -1,0 +1,17 @@
+---
+- name: Deploy NodeRed and MQTT
+  hosts: all
+  become: true
+  vars:
+    use_docker_authentication: "{{ use_docker_authentication }}"
+
+  tasks:
+    - name: Login to Dockerhub 
+      ansible.builtin.shell:
+        cmd: "docker login {{ registry_url }} -u {{ registry_username }} -p {{ registry_password }}"
+      when: use_docker_authentication == "true"
+
+    - name: Bring up NodeRed and MQTT 
+      ansible.builtin.shell:
+        chdir: /usr/local/src/app_data/example_compose
+        cmd: docker compose -f nodered_mqtt_compose.yaml up -d

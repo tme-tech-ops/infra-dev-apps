@@ -1,0 +1,67 @@
+tosca_definitions_version: dell_1_0
+
+description: >
+  This blueprint creates a connection to a remote host and uawa Fabric to install an NGINX file server
+
+imports:
+  - dell/types/types.yaml
+  - remotehost/defenitions.yaml
+  - remotehost/inputs.yaml
+  - remotehost/outputs.yaml
+
+
+input_groups:
+  remote_host:
+    display_label: Remote host credentials
+    collapsible: false
+    index: 0
+    inputs:
+      - remote_host
+      - remote_username
+      - ssh_private_key
+      - remote_port
+  nginx_settings:
+    display_label: Nginx Settings
+    collapsible: true
+    index: 1
+    inputs:
+      - nginx_htuser
+      - nginx_htpass
+      - enable_http_redirect
+      - nginx_port
+      - browser_title
+      - body_title
+      - nginx_debug
+  certificate:
+    display_label: Self-Signed Certificate
+    collapsible: true
+    index: 2
+    inputs:
+      - duration_days
+      - common_name
+      - country
+      - state
+      - location
+      - organization
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  target_environment:
+    values:
+      - remote
+  vendor:
+    values:
+      - DELL
+  solution:
+    values:
+      - POC-REMOTE-HOST
+  version:
+    values:
+      - "3.2.0"
+
+blueprint_labels:
+  env:
+    values:
+      - remote

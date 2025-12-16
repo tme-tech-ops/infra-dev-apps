@@ -1,0 +1,39 @@
+services:
+  nodered:
+    image: ${NODE_RED_URL:-mirror.gcr.io/nodered/node-red:latest}
+    container_name: ${NODERED_NAME:-nodered}
+    restart: unless-stopped
+    #devices:
+      # your serial port name. See NED Hardware/Peripherals view to learn serial port names
+      #- COM-1:/dev/ttyS0 # or - ${SERIAL_PORT:-COM-1}:/dev/ttyS0
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered_data:/data
+  influxdb:
+    image: ${INFLUXDB_URL:-mirror.gcr.io/influxdb:latest}
+    container_name: ${INFLUXDB_NAME:-influxdb}
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    # deploy: #example of how to limit resources
+    #   resources:
+    #     limits:
+    #       cpus: '1.0' # or ${CPU_LIMIT:-1.0}
+    #       memory: 4G  # or ${MEMORY_LIMIT:-4G}
+    #     reservations:
+    #       memory: 1G  # or ${MEMORY_RESERVATION:-1G}
+  grafana:
+    image: ${GRAFANA_URL:-mirror.gcr.io/grafana/grafana:latest}
+    container_name: ${GRAFANA_NAME:-grafana}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+volumes:
+  nodered_data: {}
+  influxdb_data: {}
+  grafana_data: {}

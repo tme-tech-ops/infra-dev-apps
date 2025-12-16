@@ -1,0 +1,9 @@
+capabilities:
+
+  mqtt_endpoint:
+    description: The MQTT tcp Endpoint
+    value: { concat: ['tcp://', { get_attribute: [vm_info, capabilities, vm_public_ip] }, ':', 1883] }
+
+  nodered_url:
+    description: The NodeRed URL
+    value: { concat: ['http://', { get_attribute: [vm_info, capabilities,vm_public_ip] }, ':', 1880] }

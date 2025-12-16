@@ -1,0 +1,60 @@
+tosca_definitions_version: dell_1_0
+
+imports:
+  - dell/types/types.yaml
+  - plugin:edge-plugin
+
+node_templates:
+
+  prepare_compose_yaml:
+    type: dell.nodes.Root
+    interfaces:
+      dell.interfaces.lifecycle:
+        start: |
+          import sys
+          from nativeedge import ctx
+
+          filename = ctx.download_resource("container_based/compose/container_compose.yaml")
+          if filename is None or filename == "":
+            ctx.logger.info("MFG filename not found")
+            sys.exit()
+
+          with open(filename) as f:
+            content = f.read()
+
+          ctx.instance.runtime_properties["compose_yaml"] = content
+          ctx.instance.update()
+
+  # Registry login template when needed
+  # registry_login:
+  #   type: nativeedge.nodes.template.RegistryLogin
+  #   properties:
+  #     registry_config:
+  #       credentials: [{ "registry_url": { get_input: registry_url }, "username": { get_input: registry_username }, "password": { get_secret: { get_input: registry_password } } }]
+  #     service_tag: { get_environment_capability: ece_service_tag }
+
+  nativeedge_compose:
+    type: dell.nodes.nativeedge.template.NativeEdgeCompose
+    properties:
+      compose_config:
+        service_tag: { get_environment_capability: ece_service_tag }
+        definition:
+          name: { get_sys: [deployment, name] }
+          compose: { get_attribute: [ prepare_compose_yaml, compose_yaml ] }
+          environment_variables: 
+            NODERED_NAME: { get_input: nodered_name }
+            NODERED_URL: { get_input: nodered_url }
+            INFLUXDB_NAME: { get_input: influxdb_name }
+            INFLUXDB_URL: { get_input: influxdb_url }
+            GRAFANA_NAME: { get_input: grafana_name }
+            GRAFANA_URL: { get_input: grafana_url }
+            # CPU_LIMIT: { get_input: cpu_limit }
+            # MEMORY_LIMIT: { get_input: memory_limit }
+            # MEMORY_RESERVATION: { get_input: memory_reservation }
+            # SERIAL_PORT: { get_input: serial_port }
+    relationships:
+      - type: dell.relationships.depends_on
+        target: prepare_compose_yaml
+      # - type: dell.relationships.depends_on
+      #   target: registry_login
+

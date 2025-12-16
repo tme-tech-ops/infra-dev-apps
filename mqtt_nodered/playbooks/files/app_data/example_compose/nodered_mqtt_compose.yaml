@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  node-red:
+    image: nodered/node-red:latest
+    ports:
+      - "1880:1880"
+    networks:
+      - node-red-mqtt-net
+    volumes:
+      - node-red-data:/data:rw
+      - /usr/local/src/app_data/flows/flows.json:/data/flows.json
+  mosquitto:
+    image: hivemq/hivemq-ce 
+    ports:
+      - "1883:1883"
+    networks: 
+      - node-red-mqtt-net
+
+volumes:
+  node-red-data:
+
+networks:
+  node-red-mqtt-net:

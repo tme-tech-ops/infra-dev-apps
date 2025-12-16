@@ -1,0 +1,34 @@
+capabilities:
+
+  node_red_url:
+    description: Node-Red URL
+    value:
+      concat:
+        - "http://"
+        - jmespath:
+            - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)      
+            - get_inventory:
+                get_environment_capability: ece_service_tag
+        - ":1880"
+
+  influxdb_url:
+    description: InfluxDB URL
+    value:
+      concat:
+        - "http://"
+        - jmespath:
+            - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)
+            - get_inventory:
+                get_environment_capability: ece_service_tag
+        - ":8086"
+
+  grafana_url:
+    description: Grafana URL
+    value:
+      concat:
+        - "http://"
+        - jmespath:
+            - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)            
+            - get_inventory:
+                get_environment_capability: ece_service_tag
+        - ":3000"

@@ -1,0 +1,105 @@
+inputs:
+
+  ansible_debug_level:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Ansible Debug Level
+    description: |
+      Ansible Debug Level (0 to 3)
+    default: 0
+    display:
+      group: ansible_settings
+      index: 4
+  
+  ansible_timeout:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Ansible Timeout
+    description: |
+      Ansible Timeout value (in seconds)
+    default: 3600
+    display:
+      group: ansible_settings
+      index: 5
+
+  ansible_log_stdout:
+    type: boolean
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Ansible Log Output
+    description: |
+      Enable ansible log stdout output to deployment logs
+    default: false
+    display:
+      group: ansible_settings
+      index: 6
+
+
+# Regsitry Inputs
+
+  use_docker_authentication:
+    type: boolean
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Use Docker Authentication
+    description: |
+      Use Docker Authentication
+    default: false
+    display:
+      group: registry
+      index: 10
+
+  registry_url:
+    type: string
+    hidden: false
+    only_with: use_docker_authentication
+    allow_update: true
+    display_label: Registry URL
+    required: false
+    description: |
+      Registry URL for pulling containers (default is docker.io)
+    default: "docker.io"
+    display:
+      group: registry
+      index: 15
+
+  registry_credentials:
+    type: secret_key
+    hidden: false
+    only_with: use_docker_authentication
+    required: false
+    allow_update: true
+    display_label: Registry Credentials Secret
+    description: |
+      Docker Configuration type secret containing the registry credentials.
+    constraints:
+    - type: docker_configuration_secret_name
+    display:
+      group: registry
+      index: 20
+
+  registry_username:
+    type: string
+    hidden: true
+    required: false
+    display_label: Registry Username
+    default:
+      get_secret:
+      - get_input: registry_credentials
+      - username
+
+  registry_password:
+    type: string
+    hidden: true
+    required: false
+    display_label: Registry Password
+    default:
+      get_secret:
+      - get_input: registry_credentials
+      - password

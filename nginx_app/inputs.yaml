@@ -1,0 +1,230 @@
+inputs:
+
+  vm_deployment_id:
+    type: deployment_id
+    hidden: false
+    allow_update: false
+    display_label: POC VM Deployment Instance
+    description: |
+      POC VM Deployment Instance
+    constraints:
+    - labels:
+      - csys-obj-type: environment
+      - solution: POC-VM
+    display:
+      group: deployment_target
+      index: 1
+
+  ssh_user_private_key:
+    type: secret_key
+    hidden: true
+    allow_update: false
+    required: false
+    display_label: SSH Private Key Secret used with POC VM Deployment Instance
+    description: |
+      Name of the SSH private key secret in the secret store for the VM user
+    display:
+      group: deployment_target
+      index: 2
+
+# Self-Signed Certificate Inputs
+  duration_days:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Duration
+    description: |
+      Self-Signed Certificate Duration (in days)
+    default: 365
+    display:
+      group: certificate
+      index: 3
+
+  common_name:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Common Name
+    description: |
+      Self-Signed Certificate Common Name
+    default: "artifacts.edge.lab"
+    display:
+      group: certificate
+      index: 4
+
+  country:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Country
+    description: |
+      Self-Signed Certificate Country
+    default: "US"
+    display:
+      group: certificate
+      index: 5
+
+  state:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate State
+    description: |
+      Self-Signed Certificate State
+    default: "MA"
+    display:
+      group: certificate
+      index: 6
+
+  location:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Location
+    description: |
+      Self-Signed Certificate Location
+    default: "Hopkinton"
+    display:
+      group: certificate
+      index: 7
+
+  organization:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Organization
+    description: |
+      Self-Signed Certificate Organization
+    default: "EdgeLab"
+    display:
+      group: certificate
+      index: 8
+
+# NGIX User Credential Inputs
+  nginx_htuser:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Basic Authentication User
+    description: |
+      Nginx Basic Authentication User
+    default: "admin"
+    display:
+      group: nginx_settings
+      index: 9
+
+  nginx_htpass:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Basic Authentication Password
+    description: |
+      Nginx Basic Authentication Password
+    default: "Password123!"
+    display:
+      group: nginx_settings
+      index: 10
+
+# Web Server Configuration
+  enable_http_redirect:
+    type: boolean
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Enable HTTP Redirect
+    description: |
+      Enable HTTP Redirect
+    default: true
+    display:
+      group: nginx_settings
+      index: 11
+
+  nginx_port:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Nginx Port
+    description: |
+      Nginx Port
+    default: 443
+    display:
+      group: nginx_settings
+      index: 12
+
+  browser_title:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Nginx Browser Title
+    description: |
+      Nginx Browser Title
+    default: "Artifact Server"
+    display:
+      group: nginx_settings
+      index: 13
+
+  body_title:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true    
+    display_label: Nginx Body Title
+    description: |
+      Nginx Body Title
+    default: "Artifact Server"
+    display:
+      group: nginx_settings
+      index: 14
+
+  nginx_debug:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Debug Logging
+    description: |
+      Set to 0 or 1 to enable or disable debug logging
+    default: 0
+    display:
+      group: nginx_settings
+      index: 15
+
+# ## Self-Signed Certificate info
+# DURATION_DAYS: { get_input: duration_days }
+# ARTIFACT_COMMON_NAME: { get_input: common_name }
+# COUNTRY: { get_input: country }
+# STATE: { get_input: state }
+# LOCATION: { get_input: location }
+# ORGANIZATION: { get_input: organization }
+# ## Basic Authentication info
+# NGINX_HTUSER: { get_input: nginx_htuser }
+# NGINX_HTPASS: { get_input: nginx_htpass }
+# ## TCP Port and Server titles
+# ENABLE_HTTP_REDIRECT: { get_input: enable_http_redirect }
+# NGINX_PORT: { get_input: nginx_port }
+# BROWSER_TITLE: { get_input: browser_title }
+# BODY_TITLE: { get_input: body_title }
+# ## Scirpt Execution options
+# INSTALL_SERVER: { get_input: install_server }
+# UPDATE_SERVER: { get_input: update_server }
+# DELETE_SERVER: { get_input: delete_server }
+# OFFLINE_PREP: { get_input: offline_prep }
+# DEBUG: { get_input: nginx_debug }
+# ## Update Params
+# ADD_OR_UPDATE_USER: { get_input: add_or_update_user}
+# UPDATE_SSL: { get_input: update_ssl}
+# GEN_NEW_CERT: { get_input: gen_new_cert}
+# UPDATE_CERT_PATH: { get_input: update_cert_path}
+# UPDATE_CERT_KEY_PATH: { get_input: update_cert_key_path}
+# ## Delete Params
+# DELETE_DATA: { get_input: delete_data}

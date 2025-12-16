@@ -1,0 +1,217 @@
+inputs:
+
+  remote_host:
+    type: string
+    hidden: false
+    allow_update: true
+    display_label: Remote host IP or FQDN
+    description: |
+      Remote host IP or FQDN where Ansible playbook will run
+    display:
+      group: remote_host
+      index: 0
+  
+  remote_username:
+    type: string
+    hidden: false
+    allow_update: true
+    display_label: Username for remote host login
+    description: |
+      Remote host's username for ssh login
+    display:
+      group: remote_host
+      index: 1
+      
+  ssh_private_key:
+    type: secret_key
+    hidden: false
+    display_label: SSH Private key for ssh login
+    description: |
+      Secret key containing the private key of the remote host for SSH access
+    display:
+      group: remote_host
+      index: 4
+
+  remote_port:
+    type: integer
+    hidden: false
+    allow_update: true
+    display_label: Remote host SSH port
+    description: |
+      TCP Port for ssh connection to remote host
+    default: 22
+    display:
+      group: remote_host
+      index: 5
+
+# Self-Signed Certificate Inputs
+  duration_days:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Duration
+    description: |
+      Self-Signed Certificate Duration (in days)
+    default: 365
+    display:
+      group: certificate
+      index: 3
+
+  common_name:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Common Name
+    description: |
+      Self-Signed Certificate Common Name
+    default: "artifacts.edge.lab"
+    display:
+      group: certificate
+      index: 4
+
+  country:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Country
+    description: |
+      Self-Signed Certificate Country
+    default: "US"
+    display:
+      group: certificate
+      index: 5
+
+  state:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate State
+    description: |
+      Self-Signed Certificate State
+    default: "MA"
+    display:
+      group: certificate
+      index: 6
+
+  location:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Location
+    description: |
+      Self-Signed Certificate Location
+    default: "Hopkinton"
+    display:
+      group: certificate
+      index: 7
+
+  organization:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Self-Signed Certificate Organization
+    description: |
+      Self-Signed Certificate Organization
+    default: "EdgeLab"
+    display:
+      group: certificate
+      index: 8
+
+# NGIX User Credential Inputs
+  nginx_htuser:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Basic Authentication User
+    description: |
+      Nginx Basic Authentication User
+    default: "admin"
+    display:
+      group: nginx_settings
+      index: 9
+
+  nginx_htpass:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Basic Authentication Password
+    description: |
+      Nginx Basic Authentication Password
+    default: "Password123!"
+    display:
+      group: nginx_settings
+      index: 10
+
+# Web Server Configuration
+  enable_http_redirect:
+    type: boolean
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Enable HTTP Redirect
+    description: |
+      Enable HTTP Redirect
+    default: true
+    display:
+      group: nginx_settings
+      index: 11
+
+  nginx_port:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Nginx Port
+    description: |
+      Nginx Port
+    default: 443
+    display:
+      group: nginx_settings
+      index: 12
+
+  browser_title:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Nginx Browser Title
+    description: |
+      Nginx Browser Title
+    default: "Artifact Server"
+    display:
+      group: nginx_settings
+      index: 13
+
+  body_title:
+    type: string
+    hidden: false
+    required: true
+    allow_update: true    
+    display_label: Nginx Body Title
+    description: |
+      Nginx Body Title
+    default: "Artifact Server"
+    display:
+      group: nginx_settings
+      index: 14
+
+  nginx_debug:
+    type: integer
+    hidden: false
+    required: true
+    allow_update: true
+    display_label: Debug Logging
+    description: |
+      Set to 0 or 1 to enable or disable debug logging
+    default: 0
+    display:
+      group: nginx_settings
+      index: 15

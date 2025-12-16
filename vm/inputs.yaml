@@ -1,0 +1,789 @@
+inputs:
+
+### User Defined Inputs ###
+
+# Artifact inputs 
+  poc_os_image_secret:
+    type: secret_key
+    hidden: false
+    allow_update: true
+    display_label: OS Image Secret for Virtual Machine creation
+    description: |
+      Secret containing url, username, access_token, and 
+      version of the os image.
+      See example secret in the blueprint zip.
+    constraints:
+    - type: binary_configuration
+    display:
+      group: artifacts
+      index: 10
+
+# VM Host inputs
+  vm_hostname:
+    type: string
+    hidden: false
+    display_label: VM Hostname
+    description: |
+      Hostname of the Virtual Machine
+      Cannot contain characters other than:
+      letters (a-z, A-Z), numbers (0-9), or hyphens (-).
+      Can be up to 63 characters long.
+    constraints:
+    - pattern: ^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)$
+      error_message: |
+        Must be letters (a-z, A-Z), numbers (0-9), or hyphens (-).
+        No more than 64 characters.
+    - max_length: 64
+    default: pochost
+    display:
+      group: vm
+      index: 10
+
+  vm_user_name:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: VM Username
+    description: |
+      Username to be used for the virtual machine.
+      Cannot contain leading or trailing spaces.
+    default: pocuser
+    constraints:
+    - pattern: ^(?!\s)(?!.*\s$).*$
+      error_message: Cannot contain leading or trailing spaces.
+    display:
+      group: vm
+      index: 20
+  
+  vm_password:
+    type: secret_key
+    hidden: false
+    display_label: VM Password
+    description: |
+      Secret key containing the virtual machine username password in SHA-512.
+      See example secret in the blueprint zip for details.
+    constraints:
+    - type: password
+    display:
+      group: vm
+      index: 30
+  
+# Resource inputs
+  vcpus:
+    type: integer
+    hidden: false
+    allow_update: true
+    display_label: vCPUs
+    description: Number of virtual CPUs allocated to the Virtual Machine.
+    default: 2
+    constraints:
+    - greater_or_equal: 2
+    display:
+      group: vm
+      index: 10
+
+  memory_size:
+    type: string
+    hidden: false
+    allow_update: true
+    display_label: Memory Size
+    description: Memory size with unit [KB,MB,GB,TB,PB,EB,ZB,YB].
+    default: 4GB
+    constraints:
+    - pattern: '\d+(\.\d+)?(KB|MB|GB|TB|PB|EB|ZB|YB)'
+      error_message: |
+        Incorrect format.
+        Memory size must be followed by unit [KB,MB,GB,TB,PB,EB,ZB,YB].
+        Example: 4GB
+    display:
+      group: vm
+      index: 20
+
+  os_disk_size:
+    type: string
+    hidden: false
+    allow_update: true
+    display_label: OS Disk Size
+    description: Storage size with unit [KB,MB,GB,TB,PB,EB,ZB,YB].
+    default: 50GB
+    required: true
+    constraints:
+    - pattern: '\d+(\.\d+)?(KB|MB|GB|TB|PB|EB|ZB|YB)'
+      error_message: |
+        Incorrect format.
+        Disk size must be followed by unit [KB,MB,GB,TB,PB,EB,ZB,YB].
+        Example: 50GB
+    display:
+      group: vm
+      index: 30
+
+  disk_wrapper:
+    type: string
+    display_label: Endpoint Datastore Path
+    required: true
+    allow_update: false
+    description: >
+      Deployment datastore path on target Endpoint.
+    constraints:
+      - valid_values:
+          jmespath:
+            - extra.hw_core.storage.dataStoreOrVolumes[?((((type=='SSD'||type=='HDD')&&name.contains(@,'DataStore'))||(shared&&name=='/Shared_DataStore'))&&status=='ONLINE')].mountPath
+            - get_inventory:
+                get_environment_capability: ece_service_tag
+    display:
+      group: vm
+      index: 40
+
+# Passthrough device inputs
+  use_passthrough:
+    type: boolean
+    hidden: false
+    display_label: Enable device passthrough
+    description: |
+      Uncheck to define usb, serial, gpu, video, and pcie devices for VM passthrough
+    default: false
+    display:
+      group: device_passthrough
+      index: 10
+
+  usb:
+    type: list
+    item_type: string
+    hidden: false
+    only_with: use_passthrough
+    allow_update: false
+    display_label: USB Device list
+    description: >
+      A list of USB logical names (string). USB-1 to USB-10 for Passthrough.
+    required: false
+    constraints:
+    - valid_values:
+        jmespath:
+        - extra.hw_core.usbDevice[*].logicalName
+        - get_inventory:
+            get_environment_capability: ece_service_tag
+    default: []
+    display:
+      group: device_passthrough
+      index: 20
+
+  serial_port_wrapper:
+    type: list
+    item_type: string
+    hidden: false
+    only_with: use_passthrough
+    allow_update: false
+    display_label: Serial Port
+    description: |
+      Serial port passthrough.
+      Please make sure to select the port where required device is connected.
+    required: false
+    default: []
+    constraints:
+      - valid_values:
+          jmespath:
+            - '[extra.hw_core.serialPorts[*].{"port":logicalName,"mode":`RS-232`}[*].values(@).join(`_`,@)[],extra.hw_core.serialPorts[*].{"port":logicalName,"mode":`RS-422`}[*].values(@).join(`_`,@)[],extra.hw_core.serialPorts[*].{"port":logicalName,"mode":`RS-485`}[*].values(@).join(`_`,@)[]][]'
+            - get_inventory:
+                get_environment_capability: ece_service_tag
+    display:
+      group: device_passthrough
+      index: 30
+
+  gpu:
+    type: list
+    item_type: string
+    hidden: false
+    only_with: use_passthrough
+    display_label: GPU Passthrough
+    description: >
+      GPU passthrough. A list of GPU logical names (string). NVIDIA_A2-Slot1 to
+      NVIDIA_A2-Slot8, NVIDIA_A30-Slot1 to NVIDIA_A30-Slot8
+    required: false
+    constraints:
+    - valid_values:
+        jmespath:
+        - "extra.hw_core.pciDevice[?deviceType=='GPU'].logicalName"
+        - get_inventory:
+            get_environment_capability: ece_service_tag
+    default: []
+    display:
+      group: device_passthrough
+      index: 40
+
+  video:
+    type: list
+    item_type: string
+    hidden: false
+    only_with: use_passthrough
+    display_label: Video Passthrough
+    description: >
+      Video passthrough. A list of Video logical names (string). E.g. 'Onboard
+      Controller'
+    required: false
+    constraints:
+    - valid_values:
+        - "onboard controller"
+    default: []
+    display:
+      group: device_passthrough
+      index: 50
+
+  # video: # CANNOT Use jmespath for video controllers, keeping for reference
+  #   type: list
+  #   item_type: string
+  #   hidden: false
+  #   only_with: use_passthrough
+  #   display_label: Video Passthrough
+  #   description: >
+  #     Video passthrough. A list of Video logical names (string). E.g. 'Onboard
+  #     Controller'
+  #   required: false
+  #   constraints:
+  #   - valid_values:
+  #       jmespath:
+  #       - extra.hw_core.video[*].logicalName
+  #       - get_inventory:
+  #           get_environment_capability: ece_service_tag
+  #   default: []
+  #   display:
+  #     group: device_passthrough
+  #     index: 50
+
+  pcie:
+    type: list
+    item_type: string
+    display_label: PCIe Passthrough
+    hidden: false
+    only_with: use_passthrough
+    description: >
+      PCIe passthrough. A list of PCIe logical names.
+    required: false
+    constraints:
+    - valid_values:
+        jmespath:
+        - extra.hw_core.pciDevice[*].logicalName
+        - get_inventory:
+            get_environment_capability: ece_service_tag
+    default: []
+    display:
+      group: device_passthrough
+      index: 60
+
+# Network inputs
+  vnic_0_segment_name:
+    type: string
+    hidden: false
+    allow_update: true
+    display_label: Virtual Network Segment name for Management Interface
+    description: Name of the Virtual Network Segment.
+    constraints:
+    - valid_values:
+        jmespath:
+        - extra.hw_core.network.virtualSegment[?type=='NAT'||type=='BRIDGE'].name
+        - get_inventory:
+            get_environment_capability: ece_service_tag
+    display:
+      group: network
+      index: 10
+
+  use_dhcp:
+    type: boolean
+    hidden: false
+    display_label: Use DHCP
+    description: |
+      If false, then static ip must be configured with optional DNS and Gateway.
+    default: true
+    display:
+      group: network
+      index: 20
+
+  static_ip:
+    type: string
+    hidden: false
+    exclusive_with: use_dhcp
+    display_label: Static IP and CIDR prefix
+    description: |
+      Static IP Address and CIDR that will be assigned to the VM 
+      Example: 192.168.0.100/24
+    constraints:
+    - pattern: '^(?:((25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(\.(25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})\/(3[0-2]|[12]?\d)|)$'
+      error_message: |
+        Invalid format for IP Address in CIDR format.
+        Example: 172.16.0.1/16
+    required: false
+    display:
+      group: network
+      index: 30
+
+  use_gateway:
+    type: boolean
+    hidden: false
+    exclusive_with: use_dhcp
+    display_label: Use Gateway
+    description: |
+      If false, Gateway will not be configured
+    default: false
+    display:
+      group: network
+      index: 40
+
+  gateway:
+    type: string
+    hidden: false
+    only_with: use_gateway
+    display_label: Gateway IP
+    description: IP address of the default gateway.
+    required: false
+    constraints:
+    - pattern: ^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$|^$
+      error_message: |
+        Invalid format for IP Address.
+        Example: 172.16.0.1
+    display:
+      group: network
+      index: 50
+
+  use_dns:
+    type: boolean
+    hidden: false
+    exclusive_with: use_dhcp
+    display_label: Use DNS
+    description: |
+      If false, DNS will not be configured
+    default: false
+    display:
+      group: network
+      index: 60
+
+  dns:
+    type: list
+    hidden: false
+    only_with: use_dns
+    display_label: DNS Servers
+    description: List of DNS servers to use.
+    required: false
+    default: []
+    display:
+      group: network
+      index: 70
+ 
+  use_nat:
+    type: boolean
+    hidden: false
+    display_label: Enable NAT Port Forwarding
+    description: |
+      Uncheck to define NAT Port Forwarding rules when required
+    default: false
+    display:
+      group: network
+      index: 80
+
+  port_forward_rules:
+    type: list
+    hidden: false
+    only_with: use_nat
+    item_type: port_forward_rules
+    description: |
+      Leave vm_ip blank and fill in host_ip, vm_port, protocol, host_port, and service_type
+      Example for SSH: {host_ip:IP_OF_NAT Interface,vm_port:22,protocol:TCP,host_port:9999,service_type:SSH} 
+    required: false
+    display_label: Port Mapping
+    default: []
+    display:
+      group: network
+      index: 90
+
+  add_second_nic:
+    type: boolean
+    hidden: false
+    display_label: Add Second NIC 
+    description: |
+      If false, then static ip, dns, and gateway must be configured.
+    default: false 
+    display:
+      group: network 
+      index: 100
+
+  vnic_1_segment_name:
+    type: string
+    hidden: false
+    only_with: add_second_nic
+    allow_update: true
+    display_label: Second Virtual Network Segment name
+    description: Name of the Virtual Network Segment.
+    required: false
+    constraints:
+    - valid_values:
+        jmespath:
+        - extra.hw_core.network.virtualSegment[?type=='NAT'||type=='BRIDGE'].name
+        - get_inventory:
+            get_environment_capability: ece_service_tag
+    display:
+      group: network
+      index: 110
+
+  use_dhcp2:
+    type: boolean
+    hidden: false
+    only_with: add_second_nic 
+    display_label: Use DHCP on second NIC
+    description: |
+      If false, then static ip, dns, and gateway must be configured.
+    default: true
+    display:
+      group: network 
+      index: 120
+
+  static_ip2:
+    type: string
+    hidden: false
+    exclusive_with: use_dhcp2 
+    display_label: Static IP and CIDR prefix for second NIC
+    description: |
+      Static IP Address and CIDR that will be assigned to the VM 
+      Example: 192.168.0.100/24
+    constraints:
+    - pattern: '^(?:((25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(\.(25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})\/(3[0-2]|[12]?\d)|)$'
+      error_message: |
+        Invalid format for IP Address in CIDR format.
+        Example: 172.16.0.1/16
+    required: false
+    display:
+      group: network 
+      index: 130
+
+  use_dns2:
+    type: boolean
+    hidden: false
+    exclusive_with: use_dhcp2 
+    display_label: Use DNS on second NIC
+    description: |
+      If false, then static ip, dns, and gateway must be configured.
+    default: false
+    display:
+      group: network 
+      index: 140
+
+  dns2:
+    type: list
+    hidden: false
+    only_with: use_dns2 
+    display_label: DNS Servers for second NIC
+    description: List of DNS servers to use.
+    required: false
+    default: []
+    display:
+      group: network 
+      index: 150
+
+  use_nat2:
+    type: boolean
+    hidden: false
+    only_with: add_second_nic 
+    display_label: Enable NAT Port Forwarding on second NIC
+    description: |
+      Uncheck to define NAT Port Forwarding rules when required
+    default: false 
+    display:
+      group: network 
+      index: 160
+
+  port_forward_rules2:
+    type: list
+    hidden: false
+    only_with: use_nat2 
+    item_type: port_forward_rules
+    description: |
+      Leave vm_ip blank and fill in host_ip, vm_port, protocol, host_port, and service_type
+      Example for SSH: {host_ip:IP_OF_NAT Interface,vm_port:22,protocol:TCP,host_port:9999,service_type:SSH} 
+    required: false
+    display_label: Port Mapping2
+    default: []
+    display:
+      group: network 
+      index: 170
+
+### Hidden inputs ###
+
+# Hidden VM
+  os_type:
+    type: string
+    hidden: true
+    allow_update: false
+    display_label: OS Type
+    description: The virtual machine Operating System.
+    default: UBUNTU22.04
+    constraints:
+      - valid_values:
+        - "UBUNTU16.04-32B"
+        - "UBUNTU16.04-64B"
+        - "UBUNTU18.04"
+        - "UBUNTU20.04"
+        - "UBUNTU20.10"
+        - "UBUNTU21.04"
+        - "UBUNTU21.10"
+        - "UBUNTU22.04"
+        - "UBUNTU22.10"
+        - "UBUNTU23.04"
+        - "UBUNTU24.04"
+        - "CENTOS9"
+        - "CENTOS8"
+        - "DEB-LINUX12-32B"
+        - "DEB-LINUX12-64B"
+        - "DEB-LINUX11-32B"
+        - "DEB-LINUX11-64B"
+        - "DEB-LINUX10-32B"
+        - "DEB-LINUX10-64B"
+        - "FREEBSD13-32B"
+        - "FREEBSD13-64B"
+        - "FREEBSD12-32B"
+        - "FREEBSD12-64B"
+        - "FREEBSD11-32B"
+        - "FREEBSD11-64B"
+        - "ORCL-LINUX9"
+        - "ORCL-LINUX8"
+        - "RHEL9"
+        - "RHEL8"
+        - "SUSE-SLES15"
+        - "SUSE-SLED15"
+        - "SUSE-SLES12"
+        - "SUSE-SLED12"
+        - "LINUX-OTHERS"
+        - "OTHERS"
+
+
+  hardware_options.vTPM:
+    type: boolean
+    hidden: true
+    allow_update: false
+    required: false
+    display_label: Hardware Options - vTPM
+    description: |
+      Enable vTPM.
+      Required for For Windows 11 OS, optional for other OS.
+    default: false
+
+  hardware_options.secure_boot:
+    type: boolean
+    hidden: true
+    allow_update: false
+    required: false
+    display_label: Hardware Options - Secure Boot
+    description: |
+      Enable secure boot.
+      Required for For Windows 11 OS, optional for other OS.
+    default: false
+
+  hardware_options.firmware_type:
+    type: string
+    hidden: true
+    allow_update: false
+    display_label: Hardware Options - Firmware Type
+    description: |
+      The firmware type configured in the Virtual Machine.
+      For Windows 11 OS this must be UEFI.
+    default: BIOS
+    constraints:
+      - valid_values: [BIOS, UEFI]
+
+  disk_controller:
+    type: string
+    display_label: Disk controller
+    allow_update: true
+    description: >
+      Deployment disk controller.
+    default: VIRTIO
+    hidden: true
+    constraints:
+      - valid_values:
+          - 'VIRTIO'
+          - 'SATA'
+          - 'SCSI'
+
+  disk:
+    type: string
+    display_label: Endpoint Datastore Path
+    allow_update: false
+    hidden: true
+    description: >
+      Deployment datastore path on target Endpoint.
+      Available datastores can be retrieved from inventory service
+    default: { get_input: disk_wrapper }
+
+  enable_management:
+    type: boolean
+    hidden: true
+    allow_update: false
+    display_label: Enable Management
+    description: |
+      Enable management which will create a tap interface for
+      the infrastructure segment.
+    default: true
+
+  cloudinit:
+    type: string
+    hidden: true
+    allow_update: false
+    display_label: Cloud Init Config
+    description: |
+      Cloud init cloud config, can be obtained with
+      dell.nodes.CloudInit.CloudConfig
+    required: false
+    default: ''
+
+  iso_files:
+    type: list
+    item_type: string
+    hidden: true
+    allow_update: false
+    display_label: ISO Files
+    description: |
+      List ISO files (references to catalog) to be downloaded before
+      Virtual Machine provisioning.
+    required: false
+    default: []
+
+  serial_port:
+    type: list
+    item_type: string
+    hidden: true
+    allow_update: false
+    display_label: Serial Port
+    description: |
+      Serial port passthrough.
+      Please make sure to select the port where required device is connected.
+      Example:
+        - {"port": "COM-1"}
+        - {"port": "COM-2"}
+    required: false
+    default: { get_input: serial_port_wrapper }
+
+  additional_disks:
+    type: list
+    hidden: true
+    allow_update: false
+    display_label: Additional Disks
+    description: >
+      List additional disks (references to catalog) to be downloaded
+      before Virtual Machine provisioning
+    required: false
+    default: []
+
+  boot_order:
+    type: list
+    item_type: string
+    required: false
+    hidden: true
+    allow_update: false
+    display_label: Boot Order
+    description: |
+      Boot order of the Virtual Machine.
+      If empty no changes will be made.
+    default: []
+
+# Hidden Network
+  # network_settings: # THIS INPUT IS NOT NEEDED, handled by network_config node template
+  #   type: list
+  #   item_type: dell.types.nativeedge.VMDeployNetworkSettings
+  #   hidden: true
+  #   allow_update: true
+  #   display_label: Network Settings
+  #   description: List of VMDeployNetworkSettings.
+  #   default:
+  #   - name: VNIC1
+  #     segment_name: { get_input: vnic_0_segment_name }
+  #     port_fwd_rules: { get_input: port_forward_rules }
+
+  # port_forward_host_ip: # THIS INPUT IS NOT NEEDED, reference for displaying the default host IP
+  #   type: string
+  #   hidden: true
+  #   allow_update: false
+  #   display_label: Endpoint Host IP
+  #   description: IP Address of the default host network for port forwarding
+  #   constraints:
+  #   - valid_values: 
+  #       jmespath:
+  #       - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress 
+  #       - get_inventory:
+  #           get_environment_capability: ece_service_tag
+  #   required: false
+
+# Hidden Artifact
+  binary_image_url:
+    type: string
+    hidden: true
+    allow_update: false
+    display_label: Virtual Machine Image Repository URL
+    description: |
+      URL of the OS Image that will be used to create
+      the Virtual Machine.
+    default:
+      get_secret:
+      - get_input: poc_os_image_secret
+      - binary_image_url
+
+  binary_image_access_user:
+    type: string
+    hidden: true
+    display_label: Virtual Machine Image Repository User Name
+    description: |
+      User name of the Repository of the Image Binary that will be
+      used to create the Virtual Machine.
+    default:
+      get_secret:
+      - get_input: poc_os_image_secret
+      - binary_image_access_user
+
+  binary_image_access_token:
+    type: list
+    hidden: true
+    display_label: Virtual Machine Image Repository Token Secret Name
+    description: |
+      Name of the secret storing the Token to the Repository of the
+      Image Binary that will be used to create the Virtual Machine.
+    default:
+    - get_input: poc_os_image_secret
+    - binary_image_access_token
+
+  binary_image_version:
+    type: string
+    hidden: true
+    display_label: Virtual Machine Image Version
+    description: |
+      Virtual Machine Image Version that will be used to create
+      the Virtual Machine.
+    default:
+      get_secret:
+      - get_input: poc_os_image_secret
+      - binary_image_version
+
+# Data types
+
+data_types:
+  port_forward_rules:
+    properties:
+      host_ip:
+        type: string
+        default: CHANGE TO HOST IP OF NAT VIRTUAL NETWORK SEGMENT
+        required: false
+        description: Endpoint Host network IP where the NAT VNS resides
+      host_port:
+        type: string
+        required: false
+        description: Host tcp/udp port to advertise on
+      protocol:
+        type: string
+        required: false
+        description: Protocol ("TCP", "UDP")
+      service_type:
+        type: string
+        required: false
+        description: Service Type ("SSH", "HTTP", "CUSTOM")
+      vm_port:
+        type: string
+        required: false
+        description: VM tcp/udp Port to forward
+      vm_ip:
+        type: string
+        required: false
+        description: VM IP, only needed when static IP is defined for the VM

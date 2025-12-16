@@ -1,0 +1,56 @@
+tosca_definitions_version: dell_1_0
+
+description: >
+  This deploys nodered, influxdb, and grafana containers on a NativeEdge Endpoint using NativeEdgeCompose
+
+imports:
+  - dell/types/types.yaml
+  - container_based/defenitions.yaml
+  - container_based/inputs.yaml
+  - container_based/outputs.yaml
+
+input_groups:
+  nodered:
+    display_label: NodeRed Container
+    collapsible: true
+    index: 0
+    inputs:
+      - nodered_name
+      - nodered_url
+  influxdb:
+    display_label: InfluxDB Container
+    collapsible: true
+    index: 1
+    inputs:
+      - influxdb_name
+      - influxdb_url
+
+  grafana:
+    display_label: Device Passthrough
+    collapsible: true
+    index: 2
+    inputs:
+      - grafana_name
+      - grafana_url
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  target_environment:
+    values:
+      - nativeedge
+  vendor:
+    values:
+      - DELL
+  solution:
+    values:
+      - POC-CONTAINER
+  version:
+    values:
+      - "3.2.0"
+
+blueprint_labels:
+  env:
+    values:
+      - ned

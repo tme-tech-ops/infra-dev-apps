@@ -1,0 +1,228 @@
+tosca_definitions_version: dell_1_0
+
+imports:
+  - dell/types/types.yaml
+  - plugin:edge-plugin
+  - plugin:utilities-plugin?version=>=3.1.3.0
+  - plugin:fabric-plugin?version=>=3.3.2.0
+
+node_templates:
+  ssh_keys:
+    type: dell.nodes.keys.RSAKey
+    properties:
+      use_secret_store: true
+      use_secrets_if_exist: true
+      key_name: "poc_key"
+      resource_config:
+        openssh_format: true
+        key_name: "poc_key"
+    interfaces:
+      dell.interfaces.lifecycle:
+        create:
+          implementation: keys.ne_ssh_key.operations.create
+          inputs:
+            store_public_key_material: false
+            store_private_key_material: false
+        delete: {}
+
+  binary_image:
+    type: dell.nodes.nativeedge.template.BinaryImage
+    properties:
+      binary_image_config:
+        artifact:
+          path: { get_input: binary_image_url }
+          username: { get_input: binary_image_access_user }
+          access_token: { get_secret: { get_input: binary_image_access_token } }
+        version: { get_input: binary_image_version }
+    interfaces:
+      dell.interfaces.lifecycle:
+        precreate:
+          implementation:
+            edge.nativeedge_plugin.tasks.validate_binary_image_config
+        create:
+          implementation:
+            edge.nativeedge_plugin.tasks.upload_binary
+        delete:
+          implementation:
+            edge.nativeedge_plugin.tasks.delete_binary
+
+  prepare_config:
+    type: dell.nodes.ApplicationModule
+    interfaces:
+      dell.interfaces.lifecycle:
+        precreate:
+          implementation:
+            vm/scripts/prepare_network_settings.py
+          executor: central_deployment_agent
+          inputs:
+            network_segments:
+              - { get_input: vnic_0_segment_name }
+              - { get_input: vnic_1_segment_name }
+            port_forwards:
+              - { get_input: port_forward_rules }
+              - { get_input: port_forward_rules2 }
+        create:
+          implementation: vm/scripts/prepare_serial_ports.py
+          executor: central_deployment_agent
+          inputs:
+            serial_port: { get_input: serial_port }
+        start:
+          implementation: vm/scripts/prepare_passwd.py
+          executor: central_deployment_agent
+          inputs:
+            vm_password: { get_secret: { get_input: vm_password } }
+
+  cloudinit:
+    type: dell.nodes.CloudInit.CloudConfig
+    properties:
+      resource_config:
+        hostname: { get_input: vm_hostname }
+        runcmd:
+          - netplan apply
+          - systemctl restart sshd
+        write_files:
+          - content: { get_attribute: [SELF, netplan_encoded] }
+            encoding: b64
+            path: /etc/netplan/50-cloud-init.yaml
+          - content: |
+              ClientAliveInterval 1800
+              ClientAliveCountMax 3
+            path: /etc/ssh/sshd_config
+            append: true
+        disable_root_opts: >
+          no-port-forwarding,no-agent-forwarding,no-X11-forwarding
+        disable_root: false
+        ssh_pwauth: true
+        ssh_authorized_keys:
+          - get_secret:
+              concat:
+                - get_attribute: [ssh_keys, secret_key_name]
+                - "_public"
+        users:
+          - name: { get_input: vm_user_name }
+            sudo: ['ALL=(ALL) NOPASSWD:ALL']
+            groups: users, admin
+            passwd: { get_attribute: [prepare_config, hashed_vm_passwd] }
+            lock_passwd: false
+            shell: /bin/bash
+            ssh_authorized_keys:
+              - get_secret:
+                  concat:
+                    - get_attribute: [ ssh_keys, secret_key_name ]
+                    - "_public"
+    interfaces:
+      dell.interfaces.lifecycle:
+        precreate:
+          implementation: vm/scripts/prepare_netplan_config.py
+          executor: central_deployment_agent
+          inputs:
+            template: vm/templates/netplan_config.yaml
+            parameters:
+              use_dhcp: { get_input: use_dhcp }
+              static_ip: { get_input: static_ip }
+              use_gateway: { get_input: use_gateway }
+              gateway: { get_input: gateway }
+              use_dns: { get_input: use_dns }
+              dns: { get_input: dns }
+              add_second_nic: { get_input: add_second_nic }
+              use_dhcp2: { get_input: use_dhcp2 }
+              static_ip2: { get_input: static_ip2 }
+              use_dns2: { get_input: use_dns2 }
+              dns2: { get_input: dns2 }
+        create:
+          inputs:
+            resource_config:
+              merge:
+                - { get_attribute: [SELF, resource_config] }
+                - { get_input: cloudinit }
+    relationships:
+      - type: dell.relationships.depends_on
+        target: ssh_keys
+      - type: dell.relationships.depends_on
+        target: prepare_config
+
+  vm:
+    type: dell.nodes.nativeedge.template.NativeEdgeVM
+    properties:
+      vm_config:
+        location: { get_environment_capability: ece_service_tag }
+        name: { get_sys: [deployment, name ] }
+        image: { get_attribute: [binary_image, binary_details, extra, artifact_id] }
+        os_type: { get_input: os_type }
+        resource_constraints:
+          cpu: { get_input: vcpus }
+          memory: { get_input: memory_size }
+          storage: { get_input: os_disk_size }
+          disk: { get_input: disk }
+          controller: { get_input: disk_controller }
+        hardware_options:
+          vTPM: { get_input: hardware_options.vTPM }
+          secure_boot: { get_input: hardware_options.secure_boot }
+          firmware_type: { get_input: hardware_options.firmware_type }
+        enable_management: { get_input: enable_management }
+        network_settings: { get_attribute: [prepare_config, network_settings] }
+        ports:
+          usb: { get_input: usb }
+          serial_port: { get_attribute: [prepare_config, serial_ports_list] }
+          gpu: { get_input: gpu }
+          video: { get_input: video }
+          pcie: { get_input: pcie }
+        cloudinit: { get_attribute: [cloudinit, cloud_config] }
+        iso_files: { get_input: iso_files }
+        boot_order: { get_input: boot_order }
+        additional_disks: { get_input: additional_disks }
+    relationships:
+       - type: dell.relationships.depends_on
+         target: cloudinit
+       - type: dell.relationships.depends_on
+         target: binary_image
+       - type: dell.relationships.depends_on
+         target: prepare_config
+
+  vm_info:
+    type: dell.nodes.Root
+    interfaces:
+      dell.interfaces.lifecycle:
+        create:
+          implementation: vm/scripts/get_target_id.py
+          executor: central_deployment_agent
+        start:
+          implementation: fabric.fabric_plugin.tasks.run_script
+          inputs:
+            script_path: vm/scripts/get_vm_info.sh
+            fabric_env:
+              host_string:
+                get_attribute: [vm, vm_details, name]
+              user:
+                get_input: vm_user_name
+              key:
+                get_secret:
+                  concat:
+                    - get_attribute: [ ssh_keys, secret_key_name ]
+                    - "_private"
+              port: 22
+            proxy_settings:
+              get_attribute: [ SELF, connection_proxy_settings ]
+        preupdate:
+          implementation: vm/scripts/get_target_id.py
+          executor: central_deployment_agent
+        update:
+          implementation: fabric.fabric_plugin.tasks.run_script
+          inputs:
+            script_path: vm/scripts/get_vm_info.sh
+            fabric_env:
+              host_string:
+                get_attribute: [vm, vm_details, name]
+              user:
+                get_input: vm_user_name
+              key:
+                get_secret:
+                  concat:
+                    - get_attribute: [ ssh_keys, secret_key_name ]
+                    - "_private"
+              port: 22
+            proxy_settings:
+                get_attribute: [ SELF, connection_proxy_settings ]
+    relationships:
+       - type: dell.relationships.depends_on
+         target: vm

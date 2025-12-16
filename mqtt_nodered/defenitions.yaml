@@ -1,0 +1,94 @@
+tosca_definitions_version: dell_1_0
+
+description: >
+  Blueprnt installs docker engine, then deploys an 
+  mqtt, nodered, and nginx container.
+
+imports:
+  - dell/types/types.yaml
+  - plugin:edge-plugin
+  - plugin:utilities-plugin?version=>=3.1.3.0
+  - plugin:fabric-plugin?version=>=3.3.2.0
+  - plugin:ansible-plugin?version=>=4.1.2.0
+
+dsl_definitions:
+
+  ansible_env_vars: &ansible_default_env_vars
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+    ANSIBLE_INVALID_TASK_ATTRIBUTE_FAILED: "False"
+    ANSIBLE_STDOUT_CALLBACK: json
+    ANSIBLE_DEPRECATION_WARNINGS: "False"
+
+  ansible_common_properties: &ansible_common_properties
+    ansible_external_venv: /opt/ansible
+    log_stdout: { get_input: ansible_log_stdout }
+    store_facts: false
+    timeout: { get_input: ansible_timeout }
+    debug_level: { get_input: ansible_debug_level }
+    number_of_attempts: 10
+
+  ansible_host_common: &ansible_host_common
+    ansible_host: { get_attribute: [SELF, inventory_proxy_settings, vm, ip] }
+    ansible_port: { get_attribute: [SELF, inventory_proxy_settings, vm, port] }
+    ansible_user: { get_input: vm_user_name }
+    ansible_ssh_common_args: -o StrictHostKeyChecking=no -o ControlPersist=yes
+    ansible_ssh_private_key_file:
+      get_secret:
+        concat:
+          - get_attribute: [ ssh_keys, secret_key_name ]
+          - "_private"
+    ansible_become: True
+
+node_templates:
+  install_docker:
+    type: dell.nodes.ansible.Executor
+    properties:
+      <<: *ansible_common_properties
+      playbook_path: mqtt_nodered/playbooks/install_docker.yaml
+      inventory_proxy_settings:
+        vm:
+          ip: { get_attribute: [vm, vm_details, name] }
+          port: 22
+          proxy_settings:
+              get_attribute: [ vm_info, connection_proxy_settings ]
+      sources:
+        all:
+          hosts:
+            vm: *ansible_host_common
+      ansible_env_vars:
+        <<: *ansible_default_env_vars
+    relationships:
+      - type: dell.relationships.depends_on
+        target: vm_info
+
+  deploy_mqtt_nodered:
+    type: dell.nodes.ansible.Executor
+    properties: &deploy_mqtt_nodered_inputs
+      <<: *ansible_common_properties
+      playbook_path: mqtt_nodered/playbooks/deploy_mqtt_nodered.yaml
+      inventory_proxy_settings:
+        vm:
+          ip: { get_attribute: [vm, vm_details, name] }
+          port: 22
+          proxy_settings:
+              get_attribute: [ vm_info, connection_proxy_settings ]
+      sources:
+        all:
+          hosts:
+            vm: *ansible_host_common
+      ansible_env_vars:
+        <<: *ansible_default_env_vars
+      run_data:
+        use_docker_authentication: { get_input: use_docker_authentication }
+        registry_url: { get_input: registry_url }
+        registry_username: { get_input: registry_username } 
+        registry_password: { get_input: registry_password }
+    interfaces:
+      dell.interfaces.lifecycle:
+        start:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *deploy_mqtt_nodered_inputs
+    relationships:
+      - type: dell.relationships.depends_on
+        target: install_docker

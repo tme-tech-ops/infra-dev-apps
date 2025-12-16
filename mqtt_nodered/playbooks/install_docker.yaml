@@ -1,0 +1,25 @@
+---
+- name: Install Docker and transfer compose yaml 
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Install Docker
+      ansible.builtin.shell:
+        cmd: curl https://get.docker.com/ | bash -
+
+    - name: Create a directory to store Compose files app data
+      ansible.builtin.file:
+        path: /usr/local/src/app_data
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: Copy Compose files and app data
+      ansible.builtin.copy:
+        dest: /usr/local/src/app_data/
+        src: app_data/
+        owner: root 
+        group: root
+        mode: 0755
