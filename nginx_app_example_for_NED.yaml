@@ -5,7 +5,7 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - nginx_app/defenitions.yaml
+  - nginx_app/definitions.yaml
   - nginx_app/inputs.yaml
   - nginx_app/outputs.yaml
 

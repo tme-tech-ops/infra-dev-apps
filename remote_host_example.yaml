@@ -5,7 +5,7 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - remotehost/defenitions.yaml
+  - remotehost/definitions.yaml
   - remotehost/inputs.yaml
   - remotehost/outputs.yaml
 

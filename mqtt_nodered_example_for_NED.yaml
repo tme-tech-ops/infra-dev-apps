@@ -5,10 +5,10 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - vm/defenitions.yaml
+  - vm/definitions.yaml
   - vm/inputs.yaml
   - vm/outputs.yaml
-  - mqtt_nodered/defenitions.yaml
+  - mqtt_nodered/definitions.yaml
   - mqtt_nodered/inputs.yaml
   - mqtt_nodered/outputs.yaml
 
