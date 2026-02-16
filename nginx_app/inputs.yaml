@@ -10,7 +10,7 @@ inputs:
     constraints:
     - labels:
       - csys-obj-type: environment
-      - solution: POC-VM
+      - solution: dev-apps-linux
     display:
       group: deployment_target
       index: 1
