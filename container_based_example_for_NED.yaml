@@ -5,7 +5,7 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - container_based/defenitions.yaml
+  - container_based/definitions.yaml
   - container_based/inputs.yaml
   - container_based/outputs.yaml
 

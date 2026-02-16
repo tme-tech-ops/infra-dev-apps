@@ -5,7 +5,7 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - vm/defenitions.yaml
+  - vm/definitions.yaml
   - vm/inputs.yaml
   - vm/outputs.yaml
 
