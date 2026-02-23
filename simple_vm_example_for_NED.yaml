@@ -73,13 +73,15 @@ labels:
       - ned
   vendor:
     values:
-      - DELL
+      - tme-tech-ops
   solution:
     values:
       - dev-apps-linux
+  version:
+    values:
+      - "4.1.0.0"
 
 blueprint_labels:
-  ne_type:
+  env:
     values:
-      - VM
-
+      - NED
