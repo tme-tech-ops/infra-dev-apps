@@ -38,3 +38,4 @@ use_dns2: false
 dns2: []
 use_nat2: false
 port_forward_rules2: []
+service_tag: 4WDQKW3
