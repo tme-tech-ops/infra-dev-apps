@@ -39,4 +39,4 @@ use_dns2: false
 dns2: []
 use_nat2: false
 port_forward_rules2: []
-service_tag: ece-4WDQKW3-AD
+service_tag: 4WDQKW3-AD
