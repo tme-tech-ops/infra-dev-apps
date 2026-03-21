@@ -1,3 +1,4 @@
+# awww mannnnn
 # ----- Required (no defaults) -----
 poc_os_image_secret: poc_artifact # Name of a secret stored in the orchestrator
 vm_password: vm_password # Name of a secret containing SHA-512 hashed password
