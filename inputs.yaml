@@ -1,0 +1,40 @@
+# ----- Required (no defaults) -----
+poc_os_image_secret: poc_artifact # Name of a secret stored in the orchestrator
+vm_password: vm_password # Name of a secret containing SHA-512 hashed password
+vnic_0_segment_name: default-nat              # Virtual network segment name (from endpoint inventory)
+disk_wrapper: /DataStore_0                    # Datastore mount path (from endpoint inventory)
+
+# ----- VM settings (have defaults, override as needed) -----
+vm_hostname: pochost
+vm_user_name: pocuser
+vcpus: 2
+memory_size: 4GB
+os_disk_size: 50GB
+
+# ----- Device passthrough (disabled by default) -----
+use_passthrough: false
+pcie: []
+usb: []
+serial_port_wrapper: []
+gpu: []
+video: []
+
+# ----- Network (DHCP by default) -----
+use_dhcp: true
+static_ip: ""
+use_gateway: false
+gateway: ""
+use_dns: false
+dns: []
+use_nat: false
+port_forward_rules: []
+
+# ----- Second NIC (disabled by default) -----
+add_second_nic: false
+vnic_1_segment_name: ""
+use_dhcp2: true
+static_ip2: ""
+use_dns2: false
+dns2: []
+use_nat2: false
+port_forward_rules2: []
