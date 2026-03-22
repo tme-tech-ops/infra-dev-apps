@@ -1,9 +1,9 @@
 # awww mannnnn
 # ----- Required (no defaults) -----
-poc_os_image_secret: poc_artifact # Name of a secret stored in the orchestrator
+poc_os_image_secret: test # Name of a secret stored in the orchestrator
 vm_password: vm_password # Name of a secret containing SHA-512 hashed password
-vnic_0_segment_name: default-nat              # Virtual network segment name (from endpoint inventory)
-disk_wrapper: /DataStore_0                    # Datastore mount path (from endpoint inventory)
+vnic_0_segment_name: bridge              # Virtual network segment name (from endpoint inventory)
+disk_wrapper: /DataStore0                    # Datastore mount path (from endpoint inventory)
 
 # ----- VM settings (have defaults, override as needed) -----
 vm_hostname: pochost
@@ -39,4 +39,4 @@ use_dns2: false
 dns2: []
 use_nat2: false
 port_forward_rules2: []
-service_tag: 4WDQKW3-AD
+service_tag: ece-4WDQKW3
