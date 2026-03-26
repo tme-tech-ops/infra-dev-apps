@@ -1,8 +1,5 @@
-tosca_definitions_version: dell_1_0
-
 imports:
-  - dell/types/types.yaml
-  - plugin:edge-plugin
+  - plugin:edge-plugin?version= >=3.3.17.0,<4.0.0.0
 
 node_templates:
 

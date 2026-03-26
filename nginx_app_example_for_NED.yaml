@@ -1,7 +1,7 @@
-tosca_definitions_version: dell_1_0
+tosca_definitions_version: dell_1_1
 
 description: >
-  This blueprint Deploys an NGINX server to serve static files on an existing POC VM deployment
+  This blueprint Deploys an NGINX server to serve static files on an existing example VM deployment
 
 imports:
   - dell/types/types.yaml
@@ -55,7 +55,7 @@ labels:
       - DELL
   solution:
     values:
-      - POC-NGINX
+      - EXAMPLE-NGINX
   version:
     values:
       - "3.2.0"

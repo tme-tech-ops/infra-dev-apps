@@ -1,4 +1,4 @@
-tosca_definitions_version: dell_1_0
+tosca_definitions_version: dell_1_1
 
 description: >
   This blueprint creates a Virtual Machine on a NativeEdge Endpoint and deploys MQTT and Node-Red contaners and automates setting up a simple Node-Red flow.
@@ -20,7 +20,7 @@ input_groups:
     collapsible: false
     index: 0
     inputs:
-      - poc_os_image_secret
+      - os_image_secret
   registry:
     display_label: Registry Configuration
     collapsible: true
@@ -96,7 +96,7 @@ labels:
       - DELL
   solution:
     values:
-      - POC-MQTT-NR
+      - EXAMPLE-MQTT-NR
   version:
     values:
       - "3.2.0"

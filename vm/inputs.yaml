@@ -3,7 +3,7 @@ inputs:
 ### User Defined Inputs ###
 
 # Artifact inputs 
-  poc_os_image_secret:
+  os_image_secret:
     type: secret_key
     hidden: false
     allow_update: true
@@ -34,7 +34,7 @@ inputs:
         Must be letters (a-z, A-Z), numbers (0-9), or hyphens (-).
         No more than 64 characters.
     - max_length: 64
-    default: pochost
+    default: edgehost
     display:
       group: vm
       index: 10
@@ -47,7 +47,7 @@ inputs:
     description: |
       Username to be used for the virtual machine.
       Cannot contain leading or trailing spaces.
-    default: pocuser
+    default: edgeuser
     constraints:
     - pattern: ^(?!\s)(?!.*\s$).*$
       error_message: Cannot contain leading or trailing spaces.
@@ -719,7 +719,7 @@ inputs:
       the Virtual Machine.
     default:
       get_secret:
-      - get_input: poc_os_image_secret
+      - get_input: os_image_secret
       - binary_image_url
 
   binary_image_access_user:
@@ -731,7 +731,7 @@ inputs:
       used to create the Virtual Machine.
     default:
       get_secret:
-      - get_input: poc_os_image_secret
+      - get_input: os_image_secret
       - binary_image_access_user
 
   binary_image_access_token:
@@ -742,7 +742,7 @@ inputs:
       Name of the secret storing the Token to the Repository of the
       Image Binary that will be used to create the Virtual Machine.
     default:
-    - get_input: poc_os_image_secret
+    - get_input: os_image_secret
     - binary_image_access_token
 
   binary_image_version:
@@ -754,7 +754,7 @@ inputs:
       the Virtual Machine.
     default:
       get_secret:
-      - get_input: poc_os_image_secret
+      - get_input: os_image_secret
       - binary_image_version
 
 # Data types

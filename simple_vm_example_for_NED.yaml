@@ -1,4 +1,4 @@
-tosca_definitions_version: dell_1_0
+tosca_definitions_version: dell_1_1
 
 description: >
   This blueprint creates a Virtual Machine on a NativeEdge Endpoint and provides the VM login details.
@@ -16,7 +16,7 @@ input_groups:
     collapsible: true
     index: 0
     inputs:
-      - poc_os_image_secret
+      - os_image_secret
   vm:
     display_label: NativeEdge Virtual Machine
     collapsible: true
@@ -76,7 +76,7 @@ labels:
       - DELL
   solution:
     values:
-      - POC-VM
+      - EXAMPLE-VM
   version:
     values:
       - "3.2.0"

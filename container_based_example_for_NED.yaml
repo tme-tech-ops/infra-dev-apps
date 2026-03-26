@@ -1,4 +1,4 @@
-tosca_definitions_version: dell_1_0
+tosca_definitions_version: dell_1_1
 
 description: >
   This deploys nodered, influxdb, and grafana containers on a NativeEdge Endpoint using NativeEdgeCompose
@@ -45,7 +45,7 @@ labels:
       - DELL
   solution:
     values:
-      - POC-CONTAINER
+      - EXAMPLE-CONTAINER
   version:
     values:
       - "3.2.0"

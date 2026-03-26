@@ -1,4 +1,4 @@
-tosca_definitions_version: dell_1_0
+tosca_definitions_version: dell_1_1
 
 description: >
   This blueprint creates a connection to a remote host and uawa Fabric to install an NGINX file server
@@ -56,7 +56,7 @@ labels:
       - DELL
   solution:
     values:
-      - POC-REMOTE-HOST
+      - EXAMPLE-REMOTE-HOST
   version:
     values:
       - "3.2.0"

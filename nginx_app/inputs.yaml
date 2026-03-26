@@ -4,13 +4,13 @@ inputs:
     type: deployment_id
     hidden: false
     allow_update: false
-    display_label: POC VM Deployment Instance
+    display_label: Example VM Deployment Instance
     description: |
-      POC VM Deployment Instance
+      Example VM Deployment Instance
     constraints:
     - labels:
       - csys-obj-type: environment
-      - solution: POC-VM
+      - solution: EXAMPLE-VM
     display:
       group: deployment_target
       index: 1
@@ -20,7 +20,7 @@ inputs:
     hidden: true
     allow_update: false
     required: false
-    display_label: SSH Private Key Secret used with POC VM Deployment Instance
+    display_label: SSH Private Key Secret used with Example VM Deployment Instance
     description: |
       Name of the SSH private key secret in the secret store for the VM user
     display:

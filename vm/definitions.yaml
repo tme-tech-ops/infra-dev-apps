@@ -1,10 +1,7 @@
-tosca_definitions_version: dell_1_0
-
 imports:
-  - dell/types/types.yaml
-  - plugin:edge-plugin
-  - plugin:utilities-plugin?version=>=3.1.3.0
-  - plugin:fabric-plugin?version=>=3.3.2.0
+  - plugin:edge-plugin?version= >=3.3.17.0,<4.0.0.0
+  - plugin:utilities-plugin?version= >=3.1.4.0,<4.0.0.0
+  - plugin:fabric-plugin?version= >=3.4.2.0,<4.0.0.0
 
 node_templates:
   ssh_keys:
@@ -12,10 +9,10 @@ node_templates:
     properties:
       use_secret_store: true
       use_secrets_if_exist: true
-      key_name: "poc_key"
+      key_name: "example_key"
       resource_config:
         openssh_format: true
-        key_name: "poc_key"
+        key_name: "example_key"
     interfaces:
       dell.interfaces.lifecycle:
         create:

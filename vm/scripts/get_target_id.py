@@ -72,11 +72,13 @@ if __name__ == "__main__":
         ctx.instance.runtime_properties['connection_proxy_settings'] = {
             'auto_resolve': False,
             'target_id': target_id
+            'enable_socks5': False
         }
     else:
         ctx.logger.info("No service_tag provided. Auto resolving.")
         ctx.instance.runtime_properties['_proxy_target_id'] = ''
         ctx.instance.runtime_properties['connection_proxy_settings'] = {
             'auto_resolve': True
+            'enable_socks5': False
         }
     ctx.instance.update()
