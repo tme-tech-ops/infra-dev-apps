@@ -1,0 +1,23 @@
+Changelog for infra-dev-apps
+
+All notable changes to this blueprint are recorded here.
+
+3.2.1 - 2026-06-09
+  - Fixed: VM password hashing now uses bcrypt instead of the stdlib `crypt`
+    module. The DAP deployment agent runs Python 3.14, where `crypt` was
+    removed; `import crypt` failed at runtime and stalled VM-based deploys at
+    the prepare_config start operation. cloud-init accepts the bcrypt ($2b$)
+    hash in the user `passwd` field. Mirrors the edge-cloudinit-linux fix.
+    (vm/scripts/prepare_passwd.py)
+  - Fixed: SyntaxError in get_target_id.py (missing commas in the
+    connection_proxy_settings dict literals, lines 74 and 81), introduced when
+    the enable_socks5 proxy setting was added. This failed the vm_info node and
+    blocked every VM-based deploy at install time. (vm/scripts/get_target_id.py)
+  - Changed: vm_password input description clarified (plain-text secret,
+    hashed with bcrypt at deploy time). (vm/inputs.yaml)
+  - Added: this CHANGELOG.
+
+3.2.0
+  - Baseline version prior to changelog tracking.
+    Five example deployments: simple_vm, mqtt_nodered, nginx_app,
+    container_based, remote_host.

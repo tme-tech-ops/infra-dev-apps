@@ -60,7 +60,8 @@ inputs:
     hidden: false
     display_label: VM Password
     description: |
-      Secret key containing the virtual machine username password in SHA-512.
+      Secret key containing the plain-text virtual machine username password.
+      The value is hashed with bcrypt at deploy time for cloud-init.
       See example secret in the blueprint zip for details.
     constraints:
     - type: password
