@@ -57,6 +57,7 @@ node_templates:
           implementation: fabric.fabric_plugin.tasks.run_commands
           inputs:
             commands:
+              - rm -rf nginx-static-files
               - git clone -q https://github.com/Chubtoad5/nginx-static-files.git
               - sudo chmod +x nginx-static-files/install_nginx.sh
               - sudo -E ./nginx-static-files/install_nginx.sh
@@ -91,6 +92,30 @@ node_templates:
                 # UPDATE_CERT_KEY_PATH: { get_input: update_cert_key_path}
                 ## Delete Params
                 # DELETE_DATA: { get_input: delete_data}
+              host_string:
+                get_environment_capability: vm_name
+              user:
+                get_environment_capability: vm_user_name
+              key:
+                get_secret: { get_environment_capability: vm_ssh_private_key }
+              port: 22
+            proxy_settings:
+              get_attribute: [ vm_info, connection_proxy_settings ]
+        delete:
+          executor: central_deployment_agent
+          implementation: fabric.fabric_plugin.tasks.run_commands
+          inputs:
+            commands:
+              - test -d nginx-static-files || git clone -q https://github.com/Chubtoad5/nginx-static-files.git
+              - sudo chmod +x nginx-static-files/install_nginx.sh
+              - sudo -E ./nginx-static-files/install_nginx.sh
+              - rm -rf nginx-static-files
+            fabric_env:
+              shell_env:
+                INSTALL_SERVER: "false"
+                DELETE_SERVER: "true"
+                DELETE_DATA: "true"
+                DEBUG: { get_input: nginx_debug }
               host_string:
                 get_environment_capability: vm_name
               user:
