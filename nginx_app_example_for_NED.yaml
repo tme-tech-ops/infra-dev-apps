@@ -13,12 +13,6 @@ imports:
 
 
 input_groups:
-  deployment_target:
-    display_label: Deployment Target
-    collapsible: false
-    index: 0
-    inputs:
-      - vm_deployment_id 
   nginx_settings:
     display_label: Nginx Settings
     collapsible: true

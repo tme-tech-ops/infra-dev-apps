@@ -5,13 +5,6 @@ imports:
 
 node_templates:
 
-  vm_platform:
-    type: dell.nodes.SharedResource
-    properties:
-      resource_config:
-        deployment:
-          id: { get_input: vm_deployment_id }
-
   vm_info:
     type: dell.nodes.Root
     interfaces:
@@ -20,18 +13,18 @@ node_templates:
           implementation: vm/scripts/get_target_id.py
           executor: central_deployment_agent
           inputs:
-            service_tag: { get_attribute: [vm_platform, capabilities, service_tag] }
+            service_tag: { get_environment_capability: service_tag }
         start:
           implementation: fabric.fabric_plugin.tasks.run_script
           inputs:
             script_path: vm/scripts/get_vm_info.sh
             fabric_env:
               host_string:
-                get_attribute: [vm_platform, capabilities, vm_name]
+                get_environment_capability: vm_name
               user:
-                get_attribute: [vm_platform, capabilities, vm_user_name]
+                get_environment_capability: vm_user_name
               key:
-                get_secret: { get_attribute: [vm_platform, capabilities, vm_ssh_private_key] }
+                get_secret: { get_environment_capability: vm_ssh_private_key }
               port: 22
             proxy_settings:
               get_attribute: [ SELF, connection_proxy_settings ]
@@ -39,24 +32,21 @@ node_templates:
           implementation: vm/scripts/get_target_id.py
           executor: central_deployment_agent
           inputs:
-            service_tag: { get_attribute: [vm_platform, capabilities, service_tag] }
+            service_tag: { get_environment_capability: service_tag }
         update:
           implementation: fabric.fabric_plugin.tasks.run_script
           inputs:
             script_path: vm/scripts/get_vm_info.sh
             fabric_env:
               host_string:
-                get_attribute: [vm_platform, capabilities, vm_name]
+                get_environment_capability: vm_name
               user:
-                get_attribute: [vm_platform, capabilities, vm_user_name]
+                get_environment_capability: vm_user_name
               key:
-                get_secret: { get_attribute: [vm_platform, capabilities, vm_ssh_private_key] }
+                get_secret: { get_environment_capability: vm_ssh_private_key }
               port: 22
             proxy_settings:
                 get_attribute: [ SELF, connection_proxy_settings ]
-    relationships:
-       - type: dell.relationships.depends_on
-         target: vm_platform
 
   install_file_server:
     type: dell.nodes.Root
@@ -102,11 +92,11 @@ node_templates:
                 ## Delete Params
                 # DELETE_DATA: { get_input: delete_data}
               host_string:
-                get_attribute: [vm_platform, capabilities, vm_name]
+                get_environment_capability: vm_name
               user:
-                get_attribute: [vm_platform, capabilities, vm_user_name]
+                get_environment_capability: vm_user_name
               key:
-                get_secret: { get_attribute: [vm_platform, capabilities, vm_ssh_private_key] }
+                get_secret: { get_environment_capability: vm_ssh_private_key }
               port: 22
             proxy_settings:
               get_attribute: [ vm_info, connection_proxy_settings ]

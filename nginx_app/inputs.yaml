@@ -1,32 +1,5 @@
 inputs:
 
-  vm_deployment_id:
-    type: deployment_id
-    hidden: false
-    allow_update: false
-    display_label: Example VM Deployment Instance
-    description: |
-      Example VM Deployment Instance
-    constraints:
-    - labels:
-      - csys-obj-type: environment
-      - solution: EXAMPLE-VM
-    display:
-      group: deployment_target
-      index: 1
-
-  ssh_user_private_key:
-    type: secret_key
-    hidden: true
-    allow_update: false
-    required: false
-    display_label: SSH Private Key Secret used with Example VM Deployment Instance
-    description: |
-      Name of the SSH private key secret in the secret store for the VM user
-    display:
-      group: deployment_target
-      index: 2
-
 # Self-Signed Certificate Inputs
   duration_days:
     type: integer
