@@ -1,0 +1,6 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local-only test harnesses (not published)
+compose_app/tests/
