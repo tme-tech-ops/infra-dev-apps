@@ -1,0 +1,25 @@
+capabilities:
+
+  endpoint_service_tag:
+    description: Service tag of the endpoint running the containers
+    value: { get_environment_capability: ece_service_tag }
+
+  endpoint_ip:
+    description: Default host network IP address of the endpoint
+    value:
+      jmespath:
+        - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)
+        - get_inventory:
+            get_environment_capability: ece_service_tag
+
+  compose_services:
+    description: Names of the services in the deployed compose definition
+    value: { get_attribute: [compose_definition, services] }
+
+  published_ports:
+    description: Published ports as a list of {service, host_port, container_port, protocol}
+    value: { get_attribute: [compose_definition, published_ports] }
+
+  compose_deployment_id:
+    description: NativeEdge Compute Service deployment id of the compose
+    value: { get_attribute: [nativeedge_compose, deployment_id] }

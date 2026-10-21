@@ -1,0 +1,117 @@
+inputs:
+
+  compose_yaml:
+    type: textarea
+    hidden: false
+    allow_update: true
+    display_label: Compose Definition
+    description: |
+      Compose-style YAML defining the containers to run on the endpoint.
+      Only the compose features NativeEdge supports are accepted: images must
+      include a registry or namespace (e.g. docker.io/library/nginx:alpine),
+      ports must be quoted "HOST:CONTAINER[/tcp|udp]" strings, volumes must be
+      named volumes declared under top-level volumes, and devices must use the
+      endpoint peripheral alias (e.g. COM-1:/dev/ttyS0). Privileged mode,
+      capabilities, custom networks, bind mounts and builds are rejected.
+      ${VAR} references are filled from Compose Environment.
+      Changing this on a running deployment recreates the containers: only
+      data on named volumes is kept, so mount a named volume wherever the
+      application stores data (e.g. a database data directory).
+    default: |
+      services:
+        web:
+          image: docker.io/library/nginx:alpine
+          restart: unless-stopped
+          ports:
+            - "8080:80"
+    constraints:
+      - min_length: 10
+        error_message: The compose definition is too short to be valid.
+      - max_length: 65536
+        error_message: The compose definition must not exceed 64 KiB.
+      - pattern: '^[\s\S]*\bservices\s*:[\s\S]*$'
+        error_message: The compose definition must contain a top-level 'services' section.
+    display:
+      group: container_definition
+      index: 1
+
+  compose_environment:
+    type: dict
+    hidden: false
+    allow_update: true
+    display_label: Compose Environment
+    description: |
+      Optional values substituted into ${VAR} / ${VAR:-default} references in
+      the compose definition. Keys are variable names; values must be strings.
+    required: false
+    default: {}
+    display:
+      group: container_definition
+      index: 2
+
+  registry_login_enabled:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Registry Login
+    description: |
+      Log the endpoint in to a private container registry before deploying
+      the containers. Requires Registry URL and Registry Credentials Secret.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: registry_login
+      index: 1
+
+  registry_url:
+    type: string
+    hidden: false
+    allow_update: false
+    only_with: registry_login_enabled
+    display_label: Registry URL
+    description: |
+      Registry host with optional port and path, without a scheme,
+      e.g. registry.example.com or registry.example.com:5000.
+    default: ""
+    constraints:
+      - pattern: '^$|^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?(/[a-zA-Z0-9._/-]*)?$'
+        error_message: Must be a registry host[:port][/path] without http:// or https://.
+    display:
+      group: registry_login
+      index: 2
+
+  registry_credentials_secret:
+    type: secret_key
+    hidden: false
+    allow_update: false
+    only_with: registry_login_enabled
+    display_label: Registry Credentials Secret
+    description: |
+      Name of the basic-auth secret (username / password) used to log in to
+      the registry.
+    required: false
+    constraints:
+      - type: basic_auth_credentials
+        error_message: Must be a basic_auth_credentials secret (username / password).
+    display:
+      group: registry_login
+      index: 3
+
+  registry_tls_verify:
+    type: boolean
+    hidden: false
+    allow_update: false
+    only_with: registry_login_enabled
+    display_label: Registry TLS Verify
+    description: |
+      Verify the registry's TLS certificate. Keep enabled for public registries;
+      disable only for registries with self-signed certificates.
+    default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: registry_login
+      index: 4

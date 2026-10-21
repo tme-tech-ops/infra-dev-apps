@@ -1,0 +1,56 @@
+tosca_definitions_version: dell_1_1
+
+description: >
+  Deploys a user-supplied, compose-style container definition on a NativeEdge
+  Endpoint using NativeEdgeCompose. The definition is validated against the
+  compose features NativeEdge supports before anything is sent to the
+  endpoint. Optionally logs the endpoint in to a private registry first
+  (basic-auth secret). Supports Day-2 changes to the definition through
+  deployment update.
+
+imports:
+  - dell/types/types.yaml
+  - plugin:edge-plugin?version= >=3.3.17.0,<4.0.0.0
+  - compose_app/definitions.yaml
+  - compose_app/inputs.yaml
+  - compose_app/capabilities.yaml
+
+input_groups:
+  container_definition:
+    display_label: Container Definition
+    collapsible: true
+    index: 0
+    inputs:
+      - compose_yaml
+      - compose_environment
+  registry_login:
+    display_label: Registry Login
+    collapsible: true
+    index: 1
+    inputs:
+      - registry_login_enabled
+      - registry_url
+      - registry_credentials_secret
+      - registry_tls_verify
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  target_environment:
+    values:
+      - nativeedge
+  vendor:
+    values:
+      - DELL
+  solution:
+    values:
+      - GENERIC-COMPOSE
+  version:
+    values:
+      - "1.0.6"
+
+blueprint_labels:
+  env:
+    values:
+      - ned

@@ -7,7 +7,8 @@ Deployment options:
 2. `mqtt_nodered_example_for_NED.yaml` - Deploys a VM, installs Docker, and runs Node-Red and MQTT containers with a simple Node-Red flow configured.
 3. `nginx_app_example_for_NED.yaml` - Deploys NGINX with SSL and basic authentication on an existing `simple_vm` deployment, providing a web page and simple artifact repository.
 4. `container_based_example_for_NED.yaml` - Deploys Node-Red, InfluxDB, and Grafana containers directly on a NativeEdge Endpoint using NativeEdgeCompose.
-5. `remote_host_example.yaml` - Uses the Fabric plugin to install NGINX with SSL and basic authentication on a remote host outside of NativeEdge.
+5. `compose_app_example_for_NED.yaml` - Deploys **any** user-supplied compose-style container definition directly on a NativeEdge Endpoint using NativeEdgeCompose, with optional private-registry login and Day-2 updates.
+6. `remote_host_example.yaml` - Uses the Fabric plugin to install NGINX with SSL and basic authentication on a remote host outside of NativeEdge.
 
 Key features:
 - Minimal user input to showcase the simplicity of blueprint deployment
@@ -157,6 +158,11 @@ The following capabilities are provided on a successful deployment:
 - InfluxDB URL (`http://<endpoint-ip>:8086`)
 - Grafana URL (`http://<endpoint-ip>:3000`)
 
+**compose_app deployment:**
+- Endpoint IP and service tag
+- Compose services and published ports (`[{service, host_port, container_port, protocol}]`)
+- Compose deployment ID
+
 **remote_host deployment:**
 - NGINX URL (`https://<remote-host>:443`)
 
@@ -183,6 +189,35 @@ This blueprint is designed with customization in mind and may be tailored to spe
 
 - `definitions.yaml` — Contains logic for running the NativeEdgeCompose node for deploying containers directly on the NativeEdge Endpoint.
 - The `compose/container_compose.yaml` file may be modified to use different container images or add additional services based on the use case.
+
+### `compose_app` directory
+
+- Paste a compose definition into **Compose Definition**; `${VAR}` values come from **Compose Environment**.
+- `scripts/compose_ops.py` validates the definition against the compose features NativeEdge supports *before* anything is sent to the endpoint and reports every problem at once. Not supported on NativeEdge: privileged mode, capabilities, custom networks, bind mounts, `build`, healthchecks, image digests, IP-bound/ranged/long-syntax ports, and bare image names (use `docker.io/library/nginx:alpine`, not `nginx:alpine`). Devices use the endpoint peripheral alias (`COM-1:/dev/ttyS0`). `$$` is passed literally.
+- **Registry Login** (optional) logs the endpoint in to a private registry using a `basic_auth_credentials` secret. The login is endpoint-wide and is not reverted on uninstall.
+- **Day-2:** changing the definition via deployment update recreates the containers (the stack is briefly down; named-volume data is kept). Invalid changes fail the update without touching the running stack. Drift detection covers both definition changes and container state (e.g. an exited container); a no-change update heals container drift. The `update` task of `nativeedge_compose` is *expected* to log a failure — that is what triggers the recreate.
+- **Updating from the DAP UI (Update Deployment → Advanced):**
+  - Check **Run automatic reinstall**. It is unchecked by default, which sends `skip_reinstall: true`. The update then fails with `re-installation is disabled by skip_reinstall` and the containers are left unchanged.
+  - Leave **Skip drift check** unchecked; the drift check is what detects the change.
+  - Check **Force update** only when the previous update on the deployment failed.
+  - The other defaults (Run install / uninstall workflow checked, everything else unchecked) are fine.
+- **Persistent data — use named volumes.** Every Day-2 change to the definition (or to a Compose Environment value the definition uses) deletes and recreates the *whole* stack. Only data on a **named volume** survives:
+  - Declare the volume under top-level `volumes:` and mount it at the path where the application keeps its data:
+
+    ```yaml
+    services:
+      db:
+        image: docker.io/library/postgres:16
+        volumes:
+          - pgdata:/var/lib/postgresql/data   # check the image docs for the data path
+    volumes:
+      pgdata: {}
+    ```
+  - Anything written to the container's own filesystem is lost on every recreate. That includes paths an image declares as `VOLUME` (e.g. a database data directory) if you don't mount a named volume there. Those get a fresh anonymous volume each time.
+  - Bind mounts (`/host/path:/data`) are rejected by the validator.
+  - Named volumes are **not** removed on uninstall or deployment delete. A later deployment with the same name reattaches the old data.
+  - Image changes that alter the on-disk format (e.g. a database major-version tag bump) can leave the recreated stack unable to start. Roll back the tag with a `force: true` update; the data is still on the volume.
+- **Known issue (EdgeOS 4.3 / edge-plugin 3.3.33.0):** registry login reports success, but the endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public and anonymous pulls work. The login wiring will work unchanged once the platform is fixed.
 
 ### `remotehost` directory
 

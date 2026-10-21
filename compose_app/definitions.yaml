@@ -1,0 +1,97 @@
+dsl_definitions:
+
+  desired_compose: &desired_compose
+    compose_yaml: { get_input: compose_yaml }
+    compose_environment: { get_input: compose_environment }
+    registry_login_enabled: { get_input: registry_login_enabled }
+    registry_url: { get_input: registry_url }
+    registry_auth_ref: { get_input: registry_credentials_secret }
+
+node_templates:
+
+  # Validates the definition against the compose features NativeEdge supports
+  # and publishes services / published_ports for the capabilities.
+  compose_definition:
+    type: dell.nodes.Root
+    interfaces:
+      dell.interfaces.lifecycle:
+        create:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            <<: *desired_compose
+            action: validate
+        delete:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            action: release
+        check_drift:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            <<: *desired_compose
+            action: check_drift_def
+        update:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            <<: *desired_compose
+            action: validate
+        postupdate:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            action: postupdate
+
+  # Instantiated only when registry_login_enabled is true.
+  registry_login:
+    type: dell.nodes.nativeedge.template.RegistryLogin
+    capabilities:
+      scalable:
+        properties:
+          default_instances:
+            jmespath:
+              - 'length([?registry_login_enabled == `true`]) || `0`'
+              - [{"registry_login_enabled": { get_input: registry_login_enabled }}]
+    properties:
+      service_tag: { get_environment_capability: ece_service_tag }
+      registry_config:
+        credentials:
+          - registry_url: { get_input: registry_url }
+            username: { get_secret: [{ get_input: registry_credentials_secret }, username] }
+            password: { get_secret: [{ get_input: registry_credentials_secret }, password] }
+            tls_verify: { get_input: registry_tls_verify }
+    relationships:
+      - type: dell.relationships.depends_on
+        target: compose_definition
+
+  nativeedge_compose:
+    type: dell.nodes.nativeedge.template.NativeEdgeCompose
+    properties:
+      compose_config:
+        service_tag: { get_environment_capability: ece_service_tag }
+        definition:
+          name: { get_sys: [deployment, name] }
+          compose: { get_input: compose_yaml }
+          environment_variables: { get_input: compose_environment }
+    interfaces:
+      dell.interfaces.lifecycle:
+        # The plugin's check_drift only compares containers and its update
+        # cannot carry a new definition, so both are overridden: drift covers
+        # definition (vs the compose the plugin last sent) + container state,
+        # and update routes to a recreate.
+        check_drift:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            <<: *desired_compose
+            action: check_drift_compose
+        update:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            <<: *desired_compose
+            action: recreate_gate
+        postupdate:
+          implementation: compose_app/scripts/compose_ops.py
+          inputs:
+            action: postupdate
+    relationships:
+      - type: dell.relationships.depends_on
+        target: compose_definition
+      - type: dell.relationships.depends_on
+        target: registry_login
