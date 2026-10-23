@@ -41,15 +41,12 @@ labels:
   csys-obj-type:
     values:
       - environment
-  target_environment:
+  env:
     values:
       - ddpc
-  vendor:
-    values:
-      - DELL
   solution:
     values:
-      - EXAMPLE-NGINX
+      - tme-tech-ops
   version:
     values:
       - "4.0.0"

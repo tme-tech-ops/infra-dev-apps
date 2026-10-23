@@ -17,9 +17,13 @@ affected.
   - `container_based_example_for_NED.yaml` -> `container_based_example_for_DDPC.yaml`
   - `compose_app_example_for_NED.yaml` -> `compose_app_example_for_DDPC.yaml`
   - `remote_host_example.yaml` is unchanged (not DDPC-specific).
-- Changed: labels `target_environment: nativeedge` -> `ddpc` and
-  `blueprint_labels.env: ned` -> `ddpc`. Neither label affects catalog
-  visibility, the Deploy On picker or install (verified on DDPC 4.3.0.0).
+- Changed: labels on all six entry files. `target_environment` is renamed
+  to `env` (`nativeedge` -> `ddpc`; remote_host keeps `remote`), `vendor` is
+  removed, and `solution` is `tme-tech-ops` everywhere (was `EXAMPLE-*` /
+  `GENERIC-COMPOSE`). `blueprint_labels.env: ned` -> `ddpc`.
+  `csys-obj-type` and `version` keep their roles. The env label change does
+  not affect catalog visibility, the Deploy On picker or install (verified on
+  DDPC 4.3.0.0).
 - Changed: descriptions, input group labels, capability descriptions,
   comments, README and compose_app validation/log messages say DDPC / DAP
   instead of NativeEdge. Edge-plugin identifiers (`NativeEdgeVM`,

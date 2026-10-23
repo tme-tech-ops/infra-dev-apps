@@ -88,15 +88,12 @@ labels:
   csys-obj-type:
     values:
       - environment
-  target_environment:
+  env:
     values:
       - ddpc
-  vendor:
-    values:
-      - DELL
   solution:
     values:
-      - EXAMPLE-MQTT-NR
+      - tme-tech-ops
   version:
     values:
       - "4.0.0"
