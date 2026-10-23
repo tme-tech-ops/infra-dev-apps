@@ -1,33 +1,25 @@
-imports:
-  - plugin:edge-plugin?version= >=3.3.17.0,<4.0.0.0
-
 node_templates:
 
+  # Loads the compose file into a runtime property. Nothing is created
+  # outside DAP, so there is nothing to undo on uninstall (no stop/delete).
   prepare_compose_yaml:
     type: dell.nodes.Root
     interfaces:
       dell.interfaces.lifecycle:
-        start: |
-          import sys
-          from nativeedge import ctx
+        start:
+          implementation: container_based/scripts/prepare_compose_yaml.py
+          executor: central_deployment_agent
 
-          filename = ctx.download_resource("container_based/compose/container_compose.yaml")
-          if filename is None or filename == "":
-            ctx.logger.info("MFG filename not found")
-            sys.exit()
-
-          with open(filename) as f:
-            content = f.read()
-
-          ctx.instance.runtime_properties["compose_yaml"] = content
-          ctx.instance.update()
-
-  # Registry login template when needed
+  # Registry login template when needed (see compose_app for a working,
+  # optional registry login with a basic_auth_credentials secret).
   # registry_login:
-  #   type: nativeedge.nodes.template.RegistryLogin
+  #   type: dell.nodes.nativeedge.template.RegistryLogin
   #   properties:
   #     registry_config:
-  #       credentials: [{ "registry_url": { get_input: registry_url }, "username": { get_input: registry_username }, "password": { get_secret: { get_input: registry_password } } }]
+  #       credentials:
+  #         - registry_url: { get_input: registry_url }
+  #           username: { get_secret: [{ get_input: registry_credentials_secret }, username] }
+  #           password: { get_secret: [{ get_input: registry_credentials_secret }, password] }
   #     service_tag: { get_environment_capability: ece_service_tag }
 
   nativeedge_compose:
@@ -38,7 +30,7 @@ node_templates:
         definition:
           name: { get_sys: [deployment, name] }
           compose: { get_attribute: [ prepare_compose_yaml, compose_yaml ] }
-          environment_variables: 
+          environment_variables:
             NODERED_NAME: { get_input: nodered_name }
             NODERED_URL: { get_input: nodered_url }
             INFLUXDB_NAME: { get_input: influxdb_name }
@@ -54,4 +46,3 @@ node_templates:
         target: prepare_compose_yaml
       # - type: dell.relationships.depends_on
       #   target: registry_login
-

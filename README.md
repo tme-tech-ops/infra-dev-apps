@@ -66,17 +66,17 @@ Use it to:
 
 | Plugin | Imported as | Provides | Used by |
 |---|---|---|---|
-| **edge-plugin** | `>=3.3.17.0,<4.0.0.0` | `NativeEdgeVM`, `BinaryImage`, `NativeEdgeCompose`, `RegistryLogin` node types | simple_vm, mqtt_nodered, container_based, compose_app |
-| **utilities-plugin** | `>=3.1.4.0,<4.0.0.0` | `dell.nodes.keys.RSAKey` (SSH key pair), `dell.nodes.CloudInit.CloudConfig` | simple_vm, mqtt_nodered |
-| **fabric-plugin** | `>=3.4.2.0,<4.0.0.0` | `run_script` / `run_commands` over SSH (through the eo-proxy, or direct) | simple_vm, mqtt_nodered, nginx_app, remote_host |
-| **ansible-plugin** | `>=4.1.2.0` | `dell.nodes.ansible.Executor` (playbooks through the eo-proxy) | mqtt_nodered |
+| **edge-plugin** | `>=3.3.33.0,<4.0.0.0` | `NativeEdgeVM`, `BinaryImage`, `NativeEdgeCompose`, `RegistryLogin` node types | simple_vm, mqtt_nodered, container_based, compose_app |
+| **utilities-plugin** | `>=3.2.3.0,<4.0.0.0` | `dell.nodes.keys.RSAKey` (SSH key pair), `dell.nodes.CloudInit.CloudConfig` | simple_vm, mqtt_nodered |
+| **fabric-plugin** | `>=3.4.3.0,<4.0.0.0` | `run_script` / `run_commands` over SSH (through the eo-proxy, or direct) | simple_vm, mqtt_nodered, nginx_app, remote_host |
+| **ansible-plugin** | `>=4.1.9.0,<5.0.0.0` | `dell.nodes.ansible.Executor` (playbooks through the eo-proxy) | mqtt_nodered |
 | Script plugin (built in) | none | Python operations run on the deployment agent (`central_deployment_agent`) | simple_vm, mqtt_nodered, nginx_app, container_based, compose_app |
 
-> nginx_app imports edge-plugin and utilities-plugin but doesn't use any of their node types. It only needs the fabric plugin and the script plugin.
+Plugins are imported in the entry files only (each `definitions.yaml` relies on them). The minimums are the versions DDPC 4.3.0.0 ships; older DDPC releases are not supported.
 
 ### Repository layout
 
-Each entry file at the root holds only the metadata: `imports`, `input_groups`, `labels` and `blueprint_labels`. The logic lives in a component directory, split into `definitions.yaml` (node templates and plugin imports), `inputs.yaml` and `outputs.yaml` / `capabilities.yaml`.
+Each entry file at the root holds only the metadata: `imports` (including all plugin imports), `input_groups`, `labels` and `blueprint_labels`. The logic lives in a component directory, split into `definitions.yaml` (node templates), `inputs.yaml` and `outputs.yaml` / `capabilities.yaml`.
 
 ```
 infra-dev-apps/
@@ -91,10 +91,11 @@ infra-dev-apps/
 │   ├── scripts/           network, serial-port, password, netplan, proxy and IP helpers
 │   └── templates/         netplan_config.yaml
 ├── mqtt_nodered/
-│   └── playbooks/         install_docker.yaml, deploy_mqtt_nodered.yaml, files/app_data/
+│   └── playbooks/         install_docker.yaml, docker_login.yaml, deploy_mqtt_nodered.yaml, files/app_data/
 ├── nginx_app/             Fabric node templates
 ├── container_based/
-│   └── compose/           container_compose.yaml
+│   ├── compose/           container_compose.yaml
+│   └── scripts/           prepare_compose_yaml.py
 ├── compose_app/
 │   └── scripts/           compose_ops.py (validation, drift, update gate)
 ├── remotehost/            Fabric node templates (no proxy)
@@ -114,7 +115,7 @@ infra-dev-apps/
 | mqtt_nodered | Internet access from the VM to `get.docker.com`, plus Docker Hub (or your registry) for the `nodered/node-red` and `hivemq/hivemq-ce` images |
 | nginx_app | A running **simple_vm** deployment, with internet access from the VM to `github.com` and the Ubuntu apt mirrors |
 | container_based, compose_app | The Endpoint can pull the container images, from the internet (`mirror.gcr.io`, `docker.io`, …) or a local registry |
-| remote_host | An Ubuntu 22.04+ host reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `github.com` and apt |
+| remote_host | An Ubuntu 22.04+ host reachable by SSH from the orchestrator, with `git` installed (minimal Ubuntu images don't include it), a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `github.com` and apt |
 
 ### Creating secrets
 
@@ -126,6 +127,7 @@ Secrets are created in the Orchestrator UI under **Administration > Security > S
 | VM password | Password | Password | simple_vm, mqtt_nodered |
 | Docker registry | Docker Configuration | Username, Password | mqtt_nodered (optional) |
 | Registry login | Basic Auth Credentials | Username, Password | compose_app (optional) |
+| NGINX credentials | Basic Auth Credentials | Username, Password | nginx_app, remote_host |
 | Remote host SSH key | SSH private key | SSH Private Key | remote_host |
 
 **OS image (Binary Configuration)**
@@ -165,6 +167,15 @@ Username: <registry user>
 Password: <registry password or token>
 ```
 
+**NGINX credentials (Basic Auth Credentials)**: the username and password for the NGINX basic-auth login. The password must not contain a single quote (`'`).
+
+```
+Key:   nginx-credentials
+Type:  Basic Auth Credentials
+Username: <web user>
+Password: <web password>
+```
+
 **Remote host SSH key (SSH private key)**: if you don't have a key pair yet, create one on the remote host:
 
 ```bash
@@ -197,7 +208,7 @@ Use it as a template for any VM-based workload on DDPC.
 
 | Input | Secret type | Required | Purpose |
 |---|---|---|---|
-| `os_image_secret` | Binary Configuration | Yes | Where to download the OS image. Hidden inputs read the URL, user, token and version from it. |
+| `os_image_secret` | Binary Configuration | Yes | Where to download the OS image. Hidden inputs read the URL, user and version from it; the BinaryImage node reads the token. |
 | `vm_password` | Password | Yes | Plain-text password for the VM user, hashed with bcrypt for cloud-init |
 
 ### Inputs
@@ -274,7 +285,6 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 | `serial_port` | list (string) | `serial_port_wrapper` | Serial-port list passed to the VM |
 | `binary_image_url` | string | from `os_image_secret` | Image URL |
 | `binary_image_access_user` | string | from `os_image_secret` | Image repository user |
-| `binary_image_access_token` | list | path into `os_image_secret` | Secret path to the image repository token |
 | `binary_image_version` | string | from `os_image_secret` | Logical image version |
 
 </details>
@@ -299,7 +309,7 @@ A NAT-type virtual network segment must be selected for the rules to apply.
 Defined in `vm/definitions.yaml`, in execution order:
 
 1. **`ssh_keys`** (`dell.nodes.keys.RSAKey`): creates an OpenSSH RSA key pair and stores it as the `example_key_private` / `example_key_public` secrets. If they already exist, it reuses them.
-2. **`binary_image`** (edge `BinaryImage`): validates the image settings read from `os_image_secret`, then uploads the image to the Endpoint. Uninstall deletes it.
+2. **`binary_image`** (edge `BinaryImage`): validates the image settings read from `os_image_secret` (the access token is read straight from the secret), then uploads the image to the Endpoint. Uninstall deletes it.
 3. **`prepare_config`** (script operations on the deployment agent):
    - `precreate` → `prepare_network_settings.py` builds the NIC list from the segment names and NAT rules.
    - `create` → `prepare_serial_ports.py` converts the selected serial ports to the VM port format.
@@ -352,36 +362,27 @@ All [simple_vm inputs](#inputs) are available with the same groups (Deployment A
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `use_docker_authentication` | Use Docker Authentication | boolean | `false` | ✓ | Runs `docker login` before the compose up |
-| `registry_url` | Registry URL | string | `docker.io` | ✓ | Only with `use_docker_authentication` |
-| `registry_credentials` | Registry Credentials Secret | secret_key | – | ✓ | Only with `use_docker_authentication`; schema `docker_configuration_secret_name` |
+| `use_docker_authentication` | Use Docker Authentication | boolean | `false` | ✗ | Creates the `docker_login` node |
+| `registry_url` | Registry URL | string | `docker.io` | ✗ | Only with `use_docker_authentication`; host[:port][/path], no scheme |
+| `registry_credentials` | Registry Credentials Secret | secret_key | – | ✗ | Only with `use_docker_authentication`; schema `docker_configuration_secret_name` |
 
 **Ansible Settings**
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
 | `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✓ | 0–3 |
-| `ansible_timeout` | Ansible Timeout | integer | `3600` | ✓ | Seconds |
+| `ansible_timeout` | Ansible Timeout | integer | `3600` | ✓ | 60–86400 seconds |
 | `ansible_log_stdout` | Ansible Log Output | boolean | `false` | ✓ | Sends playbook output to the deployment logs. Leave it off for faster runs. |
-
-<details>
-<summary><b>Hidden inputs</b></summary>
-
-| Input | Type | Default | Notes |
-|---|---|---|---|
-| `registry_username` | string | `username` from `registry_credentials` | Passed to the playbook |
-| `registry_password` | string | `password` from `registry_credentials` | Passed to the playbook |
-
-</details>
 
 ### Node template step-through
 
 Steps 1–6 are the [simple_vm step-through](#node-template-step-through) (`vm/definitions.yaml`). `mqtt_nodered/definitions.yaml` then adds:
 
 7. **`install_docker`** (`dell.nodes.ansible.Executor`): runs `playbooks/install_docker.yaml` against the VM through the eo-proxy (`inventory_proxy_settings` from `vm_info`), using the generated SSH key. It installs Docker from `get.docker.com` and copies `playbooks/files/app_data/` (the compose file and the Node-RED flow) to `/usr/local/src/app_data/`. It depends on `vm_info`.
-8. **`deploy_mqtt_nodered`** (`dell.nodes.ansible.Executor`): runs `playbooks/deploy_mqtt_nodered.yaml`. If `use_docker_authentication` is set, it runs `docker login` against `registry_url`. Then it runs `docker compose up -d` on `nodered_mqtt_compose.yaml`. It depends on `install_docker`.
+8. **`docker_login`** (`dell.nodes.ansible.Executor`): instance count is 1 when `use_docker_authentication` is true and 0 otherwise, so the registry secret is only read when it is needed. It runs `playbooks/docker_login.yaml`, which logs Docker in to `registry_url` with the username and password from the secret. The password goes in on stdin with `no_log`, so it never appears in the process list or the logs. It depends on `install_docker`.
+9. **`deploy_mqtt_nodered`** (`dell.nodes.ansible.Executor`): runs `playbooks/deploy_mqtt_nodered.yaml`, which runs `docker compose up -d` on `nodered_mqtt_compose.yaml`. It depends on `install_docker` and `docker_login`.
 
-The shared Ansible settings (virtualenv, env vars, timeout, retries and host connection details) are written once as `dsl_definitions` anchors and merged into both nodes.
+The shared Ansible settings (virtualenv, env vars, timeout, retries, inventory and the eo-proxy connection) are written once as `dsl_definitions` anchors and merged into all three nodes.
 
 **Uninstall** removes the VM, which removes everything installed on it.
 
@@ -410,7 +411,11 @@ Use it as a template for layering an application onto an existing deployment.
 
 ### Secrets
 
-None of its own. The SSH key comes from the parent's `vm_ssh_private_key` capability.
+| Input | Secret type | Required | Purpose |
+|---|---|---|---|
+| `nginx_credentials_secret` | Basic Auth Credentials | Yes | Username and password for the NGINX basic-auth login |
+
+The SSH key for the VM comes from the parent's `vm_ssh_private_key` capability.
 
 ### Inputs
 
@@ -418,34 +423,35 @@ None of its own. The SSH key comes from the parent's `vm_ssh_private_key` capabi
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `nginx_htuser` | Basic Authentication User | string | `admin` | ✓ | |
-| `nginx_htpass` | Basic Authentication Password | string | `Password123!` | ✓ | Plain-text input, and also returned as a capability. Change the default. |
+| `nginx_credentials_secret` | Basic Authentication Credentials Secret | secret_key | – | ✗ | Schema `basic_auth_credentials` |
 | `enable_http_redirect` | Enable HTTP Redirect | boolean | `true` | ✓ | Redirects port 80 to HTTPS |
-| `nginx_port` | Nginx Port | integer | `443` | ✓ | HTTPS port |
-| `browser_title` | Nginx Browser Title | string | `Artifact Server` | ✓ | |
-| `body_title` | Nginx Body Title | string | `Artifact Server` | ✓ | |
-| `nginx_debug` | Debug Logging | integer | `0` | ✓ | `1` enables script debug output |
+| `nginx_port` | Nginx Port | integer | `443` | ✓ | HTTPS port, 1–65535 |
+| `browser_title` | Nginx Browser Title | string | `Artifact Server` | ✓ | 1–64 characters, no quotes |
+| `body_title` | Nginx Body Title | string | `Artifact Server` | ✓ | 1–64 characters, no quotes |
+| `nginx_debug` | Debug Logging | integer | `0` | ✓ | `0` or `1` (script debug output) |
 
 **Self-Signed Certificate**
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `duration_days` | Self-Signed Certificate Duration | integer | `365` | ✓ | Days |
-| `common_name` | Self-Signed Certificate Common Name | string | `artifacts.edge.lab` | ✓ | |
-| `country` | Self-Signed Certificate Country | string | `US` | ✓ | |
-| `state` | Self-Signed Certificate State | string | `MA` | ✓ | |
-| `location` | Self-Signed Certificate Location | string | `Hopkinton` | ✓ | |
-| `organization` | Self-Signed Certificate Organization | string | `EdgeLab` | ✓ | |
+| `duration_days` | Self-Signed Certificate Duration | integer | `365` | ✓ | 1–3650 days |
+| `common_name` | Self-Signed Certificate Common Name | string | `artifacts.edge.lab` | ✓ | Hostname or FQDN |
+| `country` | Self-Signed Certificate Country | string | `US` | ✓ | Two-letter uppercase code |
+| `state` | Self-Signed Certificate State | string | `MA` | ✓ | 1–64 characters, no quotes |
+| `location` | Self-Signed Certificate Location | string | `Hopkinton` | ✓ | 1–64 characters, no quotes |
+| `organization` | Self-Signed Certificate Organization | string | `EdgeLab` | ✓ | 1–64 characters, no quotes |
 
 ### Node template step-through
 
 Defined in `nginx_app/definitions.yaml`:
 
+The SSH connection to the parent VM and the install environment are written once as `dsl_definitions` anchors.
+
 1. **`vm_info`**:
    - `create` → `vm/scripts/get_target_id.py` resolves the parent's Endpoint from its `service_tag` and stores the eo-proxy `connection_proxy_settings`.
    - `start` → Fabric runs `vm/scripts/get_vm_info.sh` on the parent VM to confirm it is reachable and has an IP.
    - `preupdate` / `update` repeat these steps.
-2. **`install_file_server`** (Fabric `run_commands` over the eo-proxy): its `create` clones `nginx-static-files` and runs `install_nginx.sh` with `sudo -E`. The certificate, basic-auth, port and title inputs are passed as `shell_env` variables. Its `delete` runs the same script with `DELETE_SERVER=true` and `DELETE_DATA=true`, then removes the clone. It depends on `vm_info`.
+2. **`install_file_server`** (Fabric `run_commands` over the eo-proxy): its `create` clones `nginx-static-files` and runs `install_nginx.sh` with `sudo -E`. The certificate, port and title inputs, and the username and password read from `nginx_credentials_secret`, are passed as `shell_env` variables. Fabric exports these unquoted, so the credentials and titles are single-quoted with `concat`. Its `delete` runs the same script with `DELETE_SERVER=true` and `DELETE_DATA=true`, then removes the clone. It depends on `vm_info`.
 
 **Uninstall** removes the NGINX server and its data from the VM. The VM itself stays: it belongs to the parent deployment.
 
@@ -454,8 +460,7 @@ Defined in `nginx_app/definitions.yaml`:
 | Capability | Value |
 |---|---|
 | `nginx_url` | `https://<vm-ip>:<nginx_port>` |
-| `nginx_username` | `nginx_htuser` input |
-| `nginx_password` | `nginx_htpass` input |
+| `nginx_credentials_secret` | Name of the NGINX credentials secret |
 
 ---
 
@@ -477,22 +482,20 @@ None. `definitions.yaml` contains a commented-out `RegistryLogin` node that you 
 
 | Group | Input | Label | Type | Default | Upd |
 |---|---|---|---|---|---|
-| NodeRed Container | `nodered_name` | Node-Red container name | string | `nodered` | ✗ |
-| NodeRed Container | `nodered_url` | Node-Red image URL and tag | string | `mirror.gcr.io/nodered/node-red:latest` | ✗ |
-| InfluxDB Container | `influxdb_name` | InfluxDB container name | string | `influxdb` | ✗ |
-| InfluxDB Container | `influxdb_url` | InfluxDB image URL and tag | string | `mirror.gcr.io/influxdb:latest` | ✗ |
-| Grafana ¹ | `grafana_name` | Grafana container name | string | `grafana` | ✗ |
-| Grafana ¹ | `grafana_url` | Grafana image URL and tag | string | `mirror.gcr.io/grafana/grafana:latest` | ✗ |
+| Node-RED Container | `nodered_name` | Node-RED Container Name | string | `nodered` | ✗ |
+| Node-RED Container | `nodered_url` | Node-RED Image | string | `mirror.gcr.io/nodered/node-red:latest` | ✗ |
+| InfluxDB Container | `influxdb_name` | InfluxDB Container Name | string | `influxdb` | ✗ |
+| InfluxDB Container | `influxdb_url` | InfluxDB Image | string | `mirror.gcr.io/influxdb:latest` | ✗ |
+| Grafana Container | `grafana_name` | Grafana Container Name | string | `grafana` | ✗ |
+| Grafana Container | `grafana_url` | Grafana Image | string | `mirror.gcr.io/grafana/grafana:latest` | ✗ |
 
-The inputs are passed to the compose file as environment variables (`NODERED_NAME`, `INFLUXDB_URL`, …) and substituted into `${VAR:-default}` references.
-
-¹ The UI currently labels this group "Device Passthrough". See [Known issues](#10-known-issues-and-limitations).
+Container names: letters, numbers, `_`, `.` and `-`, at most 63 characters. Images must include the registry (`registry/repository[:tag]`). The inputs are passed to the compose file as environment variables (`NODERED_NAME`, `NODERED_URL`, …) and substituted into `${VAR:-default}` references.
 
 ### Node template step-through
 
 Defined in `container_based/definitions.yaml`:
 
-1. **`prepare_compose_yaml`**: its `start` operation downloads `compose/container_compose.yaml` from the blueprint package and stores the contents as the `compose_yaml` runtime property.
+1. **`prepare_compose_yaml`**: its `start` operation runs `container_based/scripts/prepare_compose_yaml.py`, which downloads `compose/container_compose.yaml` from the blueprint package and stores the contents as the `compose_yaml` runtime property. It fails if the file is missing.
 2. **`nativeedge_compose`** (edge `NativeEdgeCompose`): sends that definition to the Endpoint found with `get_environment_capability: ece_service_tag`. The compose deployment is named after the DAP deployment, and the six inputs are passed as environment variables. It depends on `prepare_compose_yaml`.
 
 **Uninstall** removes the containers. The named volumes (`nodered_data`, `influxdb_data`, `grafana_data`) stay on the Endpoint.
@@ -621,6 +624,7 @@ Use it as a template for configuring existing servers over SSH.
 | Input | Secret type | Required | Purpose |
 |---|---|---|---|
 | `ssh_private_key` | SSH private key | Yes | Private key matching an `authorized_keys` entry on the remote host |
+| `nginx_credentials_secret` | Basic Auth Credentials | Yes | Username and password for the NGINX basic-auth login |
 
 ### Inputs
 
@@ -628,10 +632,10 @@ Use it as a template for configuring existing servers over SSH.
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `remote_host` | Remote host IP or FQDN | string | – | ✓ | |
-| `remote_username` | Username for remote host login | string | – | ✓ | Root, or a user with passwordless sudo |
-| `ssh_private_key` | SSH Private key for ssh login | secret_key | – | ✗ | Name of the SSH private-key secret |
-| `remote_port` | Remote host SSH port | integer | `22` | ✓ | |
+| `remote_host` | Remote Host IP Or FQDN | string | – | ✓ | IP address or hostname |
+| `remote_username` | Remote Host Username | string | – | ✓ | Linux username; root, or a user with passwordless sudo |
+| `ssh_private_key` | SSH Private Key Secret | secret_key | – | ✗ | Schema `ssh_private_key` |
+| `remote_port` | Remote Host SSH Port | integer | `22` | ✓ | 1–65535 |
 
 **Nginx Settings** and **Self-Signed Certificate** are the same inputs, with the same defaults, as in [nginx_app](#inputs-2).
 
@@ -639,7 +643,7 @@ Use it as a template for configuring existing servers over SSH.
 
 Defined in `remotehost/definitions.yaml`:
 
-1. **`install_file_server`** (Fabric `run_commands`, direct SSH): its `create` clones `nginx-static-files` on the remote host and runs `install_nginx.sh` with the NGINX and certificate inputs as `shell_env`. Its `delete` runs the script with `DELETE_SERVER=true` / `DELETE_DATA=true` and removes the clone. It is the only node, so it has no relationships.
+1. **`install_file_server`** (Fabric `run_commands`, direct SSH): its `create` clones `nginx-static-files` on the remote host and runs `install_nginx.sh` with the NGINX and certificate inputs, and the credentials from `nginx_credentials_secret`, as `shell_env` (single-quoted, as in nginx_app). Its `delete` runs the script with `DELETE_SERVER=true` / `DELETE_DATA=true` and removes the clone. It is the only node, so it has no relationships.
 
 **Uninstall** removes the NGINX server and its data from the remote host.
 
@@ -647,7 +651,8 @@ Defined in `remotehost/definitions.yaml`:
 
 | Capability | Value |
 |---|---|
-| `nginx_url` | `https://<remote_host>:443` |
+| `nginx_url` | `https://<remote_host>:<nginx_port>` |
+| `nginx_credentials_secret` | Name of the NGINX credentials secret |
 
 ---
 
@@ -667,7 +672,7 @@ Defined in `remotehost/definitions.yaml`:
 
 **Tear down**
 
-Always run the **Uninstall** workflow and wait for it to finish before deleting the deployment. Force-deleting skips the uninstall and can leave VMs, containers or images behind on the Endpoint. Uninstall layered deployments (nginx_app) before their simple_vm parent.
+Always run the **Uninstall** workflow and wait for it to finish before deleting the deployment. Force-deleting skips the uninstall and can leave VMs, containers or images behind on the Endpoint. For a layered deployment (nginx_app), uninstall **and delete** it before you uninstall its simple_vm parent. The parent's uninstall is rejected while a child deployment record still exists.
 
 ---
 
@@ -677,8 +682,7 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 - **Day-2 is only supported by compose_app.** The other entry points support install and uninstall; a deployment update on simple_vm only refreshes the VM IP.
 - **Shared SSH key:** all simple_vm / mqtt_nodered deployments share the `example_key` key pair. To give a copy its own key, change `key_name` in `vm/definitions.yaml`.
 - **Fixed interface name:** `get_vm_info.sh` reads the IP from `enp1s0`. Images with a different first-NIC name need the script updated.
-- **container_based Node-RED image:** the compose file reads `${NODE_RED_URL}`, but the blueprint passes `NODERED_URL`, so the `nodered_url` input has no effect and the compose default image is always used. Also, the Grafana input group is labelled "Device Passthrough".
-- **NGINX credentials:** nginx_app and remote_host take the basic-auth password as a plain-text input, and nginx_app returns it as a capability.
+- **NGINX credentials quoting:** the basic-auth password and the page titles are passed to the install script single-quoted, so they must not contain a single quote (`'`).
 
 ---
 

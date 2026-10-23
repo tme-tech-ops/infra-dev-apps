@@ -1,14 +1,14 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  This blueprint creates a connection to a remote host and uawa Fabric to install an NGINX file server
+  This blueprint creates a connection to a remote host and uses Fabric to install an NGINX file server
 
 imports:
   - dell/types/types.yaml
+  - plugin:fabric-plugin?version= >=3.4.3.0,<4.0.0.0
   - remotehost/definitions.yaml
   - remotehost/inputs.yaml
   - remotehost/outputs.yaml
-
 
 input_groups:
   remote_host:
@@ -25,8 +25,7 @@ input_groups:
     collapsible: true
     index: 1
     inputs:
-      - nginx_htuser
-      - nginx_htpass
+      - nginx_credentials_secret
       - enable_http_redirect
       - nginx_port
       - browser_title
@@ -56,7 +55,7 @@ labels:
       - tme-tech-ops
   version:
     values:
-      - "3.2.0"
+      - "4.0.0"
 
 blueprint_labels:
   env:

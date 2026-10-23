@@ -14,14 +14,16 @@ inputs:
       See example secret in the blueprint zip.
     constraints:
     - type: binary_configuration
+      error_message: Select a Binary Configuration secret.
     display:
-      group: artifacts
+      group: artifact
       index: 10
 
 # VM Host inputs
   vm_hostname:
     type: string
     hidden: false
+    allow_update: false
     display_label: VM Hostname
     description: |
       Hostname of the Virtual Machine
@@ -34,6 +36,7 @@ inputs:
         Must be letters (a-z, A-Z), numbers (0-9), or hyphens (-).
         No more than 64 characters.
     - max_length: 64
+      error_message: Hostname must not exceed 63 characters.
     default: edgehost
     display:
       group: vm
@@ -58,6 +61,7 @@ inputs:
   vm_password:
     type: secret_key
     hidden: false
+    allow_update: false
     display_label: VM Password
     description: |
       Secret key containing the plain-text virtual machine username password.
@@ -65,6 +69,7 @@ inputs:
       See example secret in the blueprint zip for details.
     constraints:
     - type: password
+      error_message: Select a Password secret.
     display:
       group: vm
       index: 30
@@ -79,6 +84,7 @@ inputs:
     default: 2
     constraints:
     - greater_or_equal: 2
+      error_message: Must be at least 2 vCPUs.
     display:
       group: vm
       index: 10
@@ -120,6 +126,7 @@ inputs:
 
   disk_wrapper:
     type: string
+    hidden: false
     display_label: Endpoint Datastore Path
     required: true
     allow_update: false
@@ -131,6 +138,7 @@ inputs:
             - extra.hw_core.storage.dataStoreOrVolumes[?((((type=='SSD'||type=='HDD')&&name.contains(@,'DataStore'))||(shared&&name=='/Shared_DataStore'))&&status=='ONLINE')].mountPath
             - get_inventory:
                 get_environment_capability: ece_service_tag
+        error_message: Select an online datastore on the target Endpoint.
     display:
       group: vm
       index: 40
@@ -139,10 +147,14 @@ inputs:
   use_passthrough:
     type: boolean
     hidden: false
+    allow_update: false
     display_label: Enable device passthrough
     description: |
       Uncheck to define usb, serial, gpu, video, and pcie devices for VM passthrough
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: device_passthrough
       index: 10
@@ -163,6 +175,7 @@ inputs:
         - extra.hw_core.usbDevice[*].logicalName
         - get_inventory:
             get_environment_capability: ece_service_tag
+      error_message: Select USB devices available on the target Endpoint.
     default: []
     display:
       group: device_passthrough
@@ -186,6 +199,7 @@ inputs:
             - '[extra.hw_core.serialPorts[*].{"port":logicalName,"mode":`RS-232`}[*].values(@).join(`_`,@)[],extra.hw_core.serialPorts[*].{"port":logicalName,"mode":`RS-422`}[*].values(@).join(`_`,@)[],extra.hw_core.serialPorts[*].{"port":logicalName,"mode":`RS-485`}[*].values(@).join(`_`,@)[]][]'
             - get_inventory:
                 get_environment_capability: ece_service_tag
+        error_message: Select serial ports available on the target Endpoint.
     display:
       group: device_passthrough
       index: 30
@@ -194,6 +208,7 @@ inputs:
     type: list
     item_type: string
     hidden: false
+    allow_update: false
     only_with: use_passthrough
     display_label: GPU Passthrough
     description: >
@@ -206,6 +221,7 @@ inputs:
         - "extra.hw_core.pciDevice[?deviceType=='GPU'].logicalName"
         - get_inventory:
             get_environment_capability: ece_service_tag
+      error_message: Select GPUs available on the target Endpoint.
     default: []
     display:
       group: device_passthrough
@@ -215,6 +231,7 @@ inputs:
     type: list
     item_type: string
     hidden: false
+    allow_update: false
     only_with: use_passthrough
     display_label: Video Passthrough
     description: >
@@ -224,6 +241,7 @@ inputs:
     constraints:
     - valid_values:
         - "onboard controller"
+      error_message: Must be onboard controller.
     default: []
     display:
       group: device_passthrough
@@ -255,6 +273,7 @@ inputs:
     item_type: string
     display_label: PCIe Passthrough
     hidden: false
+    allow_update: false
     only_with: use_passthrough
     description: >
       PCIe passthrough. A list of PCIe logical names.
@@ -265,6 +284,7 @@ inputs:
         - extra.hw_core.pciDevice[*].logicalName
         - get_inventory:
             get_environment_capability: ece_service_tag
+      error_message: Select PCIe devices available on the target Endpoint.
     default: []
     display:
       group: device_passthrough
@@ -283,6 +303,7 @@ inputs:
         - extra.hw_core.network.virtualSegment[?type=='NAT'||type=='BRIDGE'].name
         - get_inventory:
             get_environment_capability: ece_service_tag
+      error_message: Select a bridged or NAT virtual network segment on the target Endpoint.
     display:
       group: network
       index: 10
@@ -290,10 +311,14 @@ inputs:
   use_dhcp:
     type: boolean
     hidden: false
+    allow_update: false
     display_label: Use DHCP
     description: |
       If false, then static ip must be configured with optional DNS and Gateway.
     default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network
       index: 20
@@ -301,6 +326,7 @@ inputs:
   static_ip:
     type: string
     hidden: false
+    allow_update: false
     exclusive_with: use_dhcp
     display_label: Static IP and CIDR prefix
     description: |
@@ -319,11 +345,15 @@ inputs:
   use_gateway:
     type: boolean
     hidden: false
+    allow_update: false
     exclusive_with: use_dhcp
     display_label: Use Gateway
     description: |
       If false, Gateway will not be configured
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network
       index: 40
@@ -331,6 +361,7 @@ inputs:
   gateway:
     type: string
     hidden: false
+    allow_update: false
     only_with: use_gateway
     display_label: Gateway IP
     description: IP address of the default gateway.
@@ -347,18 +378,24 @@ inputs:
   use_dns:
     type: boolean
     hidden: false
+    allow_update: false
     exclusive_with: use_dhcp
     display_label: Use DNS
     description: |
       If false, DNS will not be configured
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network
       index: 60
 
   dns:
     type: list
+    item_type: string
     hidden: false
+    allow_update: false
     only_with: use_dns
     display_label: DNS Servers
     description: List of DNS servers to use.
@@ -371,10 +408,14 @@ inputs:
   use_nat:
     type: boolean
     hidden: false
+    allow_update: false
     display_label: Enable NAT Port Forwarding
     description: |
       Uncheck to define NAT Port Forwarding rules when required
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network
       index: 80
@@ -382,6 +423,7 @@ inputs:
   port_forward_rules:
     type: list
     hidden: false
+    allow_update: false
     only_with: use_nat
     item_type: port_forward_rules
     description: |
@@ -397,10 +439,14 @@ inputs:
   add_second_nic:
     type: boolean
     hidden: false
+    allow_update: false
     display_label: Add Second NIC 
     description: |
       If false, then static ip, dns, and gateway must be configured.
     default: false 
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network 
       index: 100
@@ -419,6 +465,7 @@ inputs:
         - extra.hw_core.network.virtualSegment[?type=='NAT'||type=='BRIDGE'].name
         - get_inventory:
             get_environment_capability: ece_service_tag
+      error_message: Select a bridged or NAT virtual network segment on the target Endpoint.
     display:
       group: network
       index: 110
@@ -426,11 +473,15 @@ inputs:
   use_dhcp2:
     type: boolean
     hidden: false
+    allow_update: false
     only_with: add_second_nic 
     display_label: Use DHCP on second NIC
     description: |
       If false, then static ip, dns, and gateway must be configured.
     default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network 
       index: 120
@@ -438,6 +489,7 @@ inputs:
   static_ip2:
     type: string
     hidden: false
+    allow_update: false
     exclusive_with: use_dhcp2 
     display_label: Static IP and CIDR prefix for second NIC
     description: |
@@ -456,18 +508,24 @@ inputs:
   use_dns2:
     type: boolean
     hidden: false
+    allow_update: false
     exclusive_with: use_dhcp2 
     display_label: Use DNS on second NIC
     description: |
       If false, then static ip, dns, and gateway must be configured.
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network 
       index: 140
 
   dns2:
     type: list
+    item_type: string
     hidden: false
+    allow_update: false
     only_with: use_dns2 
     display_label: DNS Servers for second NIC
     description: List of DNS servers to use.
@@ -480,11 +538,15 @@ inputs:
   use_nat2:
     type: boolean
     hidden: false
+    allow_update: false
     only_with: add_second_nic 
     display_label: Enable NAT Port Forwarding on second NIC
     description: |
       Uncheck to define NAT Port Forwarding rules when required
     default: false 
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: network 
       index: 160
@@ -492,6 +554,7 @@ inputs:
   port_forward_rules2:
     type: list
     hidden: false
+    allow_update: false
     only_with: use_nat2 
     item_type: port_forward_rules
     description: |
@@ -551,6 +614,7 @@ inputs:
         - "SUSE-SLED12"
         - "LINUX-OTHERS"
         - "OTHERS"
+        error_message: Select a supported OS type.
 
 
   hardware_options.vTPM:
@@ -563,6 +627,9 @@ inputs:
       Enable vTPM.
       Required for For Windows 11 OS, optional for other OS.
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
 
   hardware_options.secure_boot:
     type: boolean
@@ -574,6 +641,9 @@ inputs:
       Enable secure boot.
       Required for For Windows 11 OS, optional for other OS.
     default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
 
   hardware_options.firmware_type:
     type: string
@@ -586,6 +656,7 @@ inputs:
     default: BIOS
     constraints:
       - valid_values: [BIOS, UEFI]
+        error_message: Must be BIOS or UEFI.
 
   disk_controller:
     type: string
@@ -600,6 +671,7 @@ inputs:
           - 'VIRTIO'
           - 'SATA'
           - 'SCSI'
+        error_message: Must be VIRTIO, SATA or SCSI.
 
   disk:
     type: string
@@ -620,6 +692,9 @@ inputs:
       Enable management which will create a tap interface for
       the infrastructure segment.
     default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
 
   cloudinit:
     type: string
@@ -661,6 +736,7 @@ inputs:
 
   additional_disks:
     type: list
+    item_type: dict
     hidden: true
     allow_update: false
     display_label: Additional Disks
@@ -726,6 +802,7 @@ inputs:
   binary_image_access_user:
     type: string
     hidden: true
+    allow_update: false
     display_label: Virtual Machine Image Repository User Name
     description: |
       User name of the Repository of the Image Binary that will be
@@ -735,20 +812,11 @@ inputs:
       - get_input: os_image_secret
       - binary_image_access_user
 
-  binary_image_access_token:
-    type: list
-    hidden: true
-    display_label: Virtual Machine Image Repository Token Secret Name
-    description: |
-      Name of the secret storing the Token to the Repository of the
-      Image Binary that will be used to create the Virtual Machine.
-    default:
-    - get_input: os_image_secret
-    - binary_image_access_token
 
   binary_image_version:
     type: string
     hidden: true
+    allow_update: false
     display_label: Virtual Machine Image Version
     description: |
       Virtual Machine Image Version that will be used to create

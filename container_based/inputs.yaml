@@ -1,112 +1,100 @@
 inputs:
+
   nodered_name:
-    display_label: "Node-Red container name"
-    description: "Name of the Node-Red container"
     type: string
-    required: false
+    hidden: false
+    required: true
+    allow_update: false
+    display_label: Node-RED Container Name
+    description: |
+      Name of the Node-RED container on the Endpoint.
     default: "nodered"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$
+        error_message: Must start with a letter or number and contain only letters, numbers, underscores, dots or hyphens (max 63).
     display:
-      group: container
+      group: nodered
       index: 1
 
   nodered_url:
-    display_label: "Node-Red image URL and tag"
-    description: "URL path and tage of Node-Red image"
     type: string
-    required: false
+    hidden: false
+    required: true
+    allow_update: false
+    display_label: Node-RED Image
+    description: |
+      Image reference (registry/repository:tag) of the Node-RED container.
+      The registry must be included, e.g. mirror.gcr.io/nodered/node-red:latest.
     default: "mirror.gcr.io/nodered/node-red:latest"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?/[a-z0-9._/-]+(:[a-zA-Z0-9._-]+)?$
+        error_message: Must be registry/repository[:tag], e.g. mirror.gcr.io/nodered/node-red:latest.
     display:
-      group: container
+      group: nodered
       index: 2
 
   influxdb_name:
-    display_label: "InfluxDB container name"
-    description: "Name of the InfluxDB container"
     type: string
-    required: false
+    hidden: false
+    required: true
+    allow_update: false
+    display_label: InfluxDB Container Name
+    description: |
+      Name of the InfluxDB container on the Endpoint.
     default: "influxdb"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$
+        error_message: Must start with a letter or number and contain only letters, numbers, underscores, dots or hyphens (max 63).
     display:
-      group: container
-      index: 3
+      group: influxdb
+      index: 1
 
   influxdb_url:
-    display_label: "InfluxDB image URL and tag"
-    description: "URL path and tage of InfluxDB image"
     type: string
-    required: false
+    hidden: false
+    required: true
+    allow_update: false
+    display_label: InfluxDB Image
+    description: |
+      Image reference (registry/repository:tag) of the InfluxDB container.
+      The registry must be included, e.g. mirror.gcr.io/influxdb:latest.
     default: "mirror.gcr.io/influxdb:latest"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?/[a-z0-9._/-]+(:[a-zA-Z0-9._-]+)?$
+        error_message: Must be registry/repository[:tag], e.g. mirror.gcr.io/influxdb:latest.
     display:
-      group: container
-      index: 4
+      group: influxdb
+      index: 2
 
   grafana_name:
-    display_label: "Grafana container name"
-    description: "Name of the Grafana container"
     type: string
-    required: false
+    hidden: false
+    required: true
+    allow_update: false
+    display_label: Grafana Container Name
+    description: |
+      Name of the Grafana container on the Endpoint.
     default: "grafana"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$
+        error_message: Must start with a letter or number and contain only letters, numbers, underscores, dots or hyphens (max 63).
     display:
-      group: container
-      index: 5
+      group: grafana
+      index: 1
 
   grafana_url:
-    display_label: "Grafana image URL and tag"
-    description: "URL path and tage of Grafana image"
     type: string
-    required: false
+    hidden: false
+    required: true
+    allow_update: false
+    display_label: Grafana Image
+    description: |
+      Image reference (registry/repository:tag) of the Grafana container.
+      The registry must be included, e.g. mirror.gcr.io/grafana/grafana:latest.
     default: "mirror.gcr.io/grafana/grafana:latest"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?/[a-z0-9._/-]+(:[a-zA-Z0-9._-]+)?$
+        error_message: Must be registry/repository[:tag], e.g. mirror.gcr.io/grafana/grafana:latest.
     display:
-      group: container
-      index: 6
-
-  # override_ports:
-  #   display_label: "Override ports"
-  #   description: "Override ports"
-  #   type: boolean
-  #   default: false
-  # nodered_port:
-  #   display_label: "Node-Red port"
-  #   description: "Node-Red port"
-  #   type: string
-  #   only_with: override_ports
-  #   required: false
-  #   default: "1880"
-  # serial_port:
-  #   display_label: "Serial Port"
-  #   description: "Serial port"
-  #   type: string
-  #   required: false
-  #   default: "COM-1"
-  # cpu_limit:
-  #   display_label: "CPU Limit"
-  #   description: "CPU limit"
-  #   type: string
-  #   required: false
-  #   default: "2"
-  # memory_limit:
-  #   display_label: "Memory Limit"
-  #   description: "Memory limit"
-  #   type: string
-  #   required: false
-  #   default: "2G"
-  # memory_reservation:
-  #   display_label: "Memory Reservation"
-  #   description: "Memory reservation"
-  #   type: string
-  #   required: false
-  #   default: "2G"
-
-  # Inputs if registry login is required
-
-  # registry_url:
-  #   display_label: "Registry URL"
-  #   description: "Registry URL"
-  #   type: string
-  # registry_username:
-  #   display_label: "Registry Username"
-  #   description: "Registry username"
-  #   type: string
-  # registry_password:
-  #   display_label: "Registry Password"
-  #   description: "Registry password"
-  #   type: secret_key
+      group: grafana
+      index: 2

@@ -5,12 +5,10 @@ description: >
 
 imports:
   - dell/types/types.yaml
+  - plugin:fabric-plugin?version= >=3.4.3.0,<4.0.0.0
   - nginx_app/definitions.yaml
   - nginx_app/inputs.yaml
   - nginx_app/outputs.yaml
-
-
-
 
 input_groups:
   nginx_settings:
@@ -18,8 +16,7 @@ input_groups:
     collapsible: true
     index: 1
     inputs:
-      - nginx_htuser
-      - nginx_htpass
+      - nginx_credentials_secret
       - enable_http_redirect
       - nginx_port
       - browser_title

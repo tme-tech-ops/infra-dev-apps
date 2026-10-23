@@ -1,6 +1,6 @@
 services:
   nodered:
-    image: ${NODE_RED_URL:-mirror.gcr.io/nodered/node-red:latest}
+    image: ${NODERED_URL:-mirror.gcr.io/nodered/node-red:latest}
     container_name: ${NODERED_NAME:-nodered}
     restart: unless-stopped
     #devices:

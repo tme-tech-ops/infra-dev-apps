@@ -1,18 +1,20 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  This blueprint creates a Virtual Machine on a Dell Distributed Private Cloud (DDPC) Endpoint and deploys MQTT and Node-Red contaners and automates setting up a simple Node-Red flow.
+  This blueprint creates a Virtual Machine on a Dell Distributed Private Cloud (DDPC) Endpoint and deploys MQTT and Node-Red containers and automates setting up a simple Node-Red flow.
 
 imports:
   - dell/types/types.yaml
+  - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
+  - plugin:utilities-plugin?version= >=3.2.3.0,<4.0.0.0
+  - plugin:fabric-plugin?version= >=3.4.3.0,<4.0.0.0
+  - plugin:ansible-plugin?version= >=4.1.9.0,<5.0.0.0
   - vm/definitions.yaml
   - vm/inputs.yaml
   - vm/outputs.yaml
   - mqtt_nodered/definitions.yaml
   - mqtt_nodered/inputs.yaml
   - mqtt_nodered/outputs.yaml
-
-
 
 input_groups:
   artifact:
@@ -82,7 +84,6 @@ input_groups:
       - ansible_debug_level
       - ansible_timeout
       - ansible_log_stdout
-
 
 labels:
   csys-obj-type:

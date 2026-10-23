@@ -4,30 +4,42 @@ inputs:
     type: string
     hidden: false
     allow_update: true
-    display_label: Remote host IP or FQDN
+    display_label: Remote Host IP Or FQDN
     description: |
-      Remote host IP or FQDN where Ansible playbook will run
+      IP address or FQDN of the remote host NGINX is installed on.
+    constraints:
+      - pattern: ^[a-zA-Z0-9]([a-zA-Z0-9.:-]*[a-zA-Z0-9])?$
+        error_message: Must be an IP address or hostname (letters, numbers, dots, colons and hyphens).
     display:
       group: remote_host
       index: 0
-  
+
   remote_username:
     type: string
     hidden: false
     allow_update: true
-    display_label: Username for remote host login
+    display_label: Remote Host Username
     description: |
-      Remote host's username for ssh login
+      SSH login user on the remote host. Must be root or have passwordless
+      sudo (ALL=(ALL) NOPASSWD:ALL).
+    constraints:
+      - pattern: ^[a-z_][a-z0-9_-]{0,31}$
+        error_message: Must be a valid Linux username (lowercase letters, digits, underscores, hyphens).
     display:
       group: remote_host
       index: 1
-      
+
   ssh_private_key:
     type: secret_key
     hidden: false
-    display_label: SSH Private key for ssh login
+    allow_update: false
+    display_label: SSH Private Key Secret
     description: |
-      Secret key containing the private key of the remote host for SSH access
+      Name of the SSH private key secret matching an authorized_keys entry
+      on the remote host.
+    constraints:
+      - type: ssh_private_key
+        error_message: Select an SSH private key secret.
     display:
       group: remote_host
       index: 4
@@ -36,10 +48,13 @@ inputs:
     type: integer
     hidden: false
     allow_update: true
-    display_label: Remote host SSH port
+    display_label: Remote Host SSH Port
     description: |
-      TCP Port for ssh connection to remote host
+      TCP port of the SSH server on the remote host.
     default: 22
+    constraints:
+      - in_range: [1, 65535]
+        error_message: Must be a TCP port between 1 and 65535.
     display:
       group: remote_host
       index: 5
@@ -52,8 +67,11 @@ inputs:
     allow_update: true
     display_label: Self-Signed Certificate Duration
     description: |
-      Self-Signed Certificate Duration (in days)
+      Validity of the self-signed certificate, in days (1 to 3650).
     default: 365
+    constraints:
+      - in_range: [1, 3650]
+        error_message: Must be between 1 and 3650 days.
     display:
       group: certificate
       index: 3
@@ -65,8 +83,11 @@ inputs:
     allow_update: true
     display_label: Self-Signed Certificate Common Name
     description: |
-      Self-Signed Certificate Common Name
+      Common Name (CN) of the self-signed certificate, usually the server's FQDN.
     default: "artifacts.edge.lab"
+    constraints:
+      - pattern: ^[a-zA-Z0-9*]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$
+        error_message: Must be a hostname or FQDN (letters, numbers, dots and hyphens).
     display:
       group: certificate
       index: 4
@@ -78,8 +99,11 @@ inputs:
     allow_update: true
     display_label: Self-Signed Certificate Country
     description: |
-      Self-Signed Certificate Country
+      Two-letter ISO country code of the self-signed certificate (e.g. US).
     default: "US"
+    constraints:
+      - pattern: ^[A-Z]{2}$
+        error_message: Must be a two-letter uppercase country code, e.g. US.
     display:
       group: certificate
       index: 5
@@ -91,8 +115,11 @@ inputs:
     allow_update: true
     display_label: Self-Signed Certificate State
     description: |
-      Self-Signed Certificate State
+      State or province of the self-signed certificate.
     default: "MA"
+    constraints:
+      - pattern: ^[^'"]{1,64}$
+        error_message: Must be 1 to 64 characters, without quotes.
     display:
       group: certificate
       index: 6
@@ -104,8 +131,11 @@ inputs:
     allow_update: true
     display_label: Self-Signed Certificate Location
     description: |
-      Self-Signed Certificate Location
+      City or locality of the self-signed certificate.
     default: "Hopkinton"
+    constraints:
+      - pattern: ^[^'"]{1,64}$
+        error_message: Must be 1 to 64 characters, without quotes.
     display:
       group: certificate
       index: 7
@@ -117,38 +147,32 @@ inputs:
     allow_update: true
     display_label: Self-Signed Certificate Organization
     description: |
-      Self-Signed Certificate Organization
+      Organization of the self-signed certificate.
     default: "EdgeLab"
+    constraints:
+      - pattern: ^[^'"]{1,64}$
+        error_message: Must be 1 to 64 characters, without quotes.
     display:
       group: certificate
       index: 8
 
-# NGIX User Credential Inputs
-  nginx_htuser:
-    type: string
+# NGINX Basic Authentication
+  nginx_credentials_secret:
+    type: secret_key
     hidden: false
     required: true
-    allow_update: true
-    display_label: Basic Authentication User
+    allow_update: false
+    display_label: Basic Authentication Credentials Secret
     description: |
-      Nginx Basic Authentication User
-    default: "admin"
+      Name of a Basic Auth Credentials secret holding the NGINX basic
+      authentication username and password. The password must not contain
+      a single quote (').
+    constraints:
+      - type: basic_auth_credentials
+        error_message: Select a Basic Auth Credentials secret.
     display:
       group: nginx_settings
       index: 9
-
-  nginx_htpass:
-    type: string
-    hidden: false
-    required: true
-    allow_update: true
-    display_label: Basic Authentication Password
-    description: |
-      Nginx Basic Authentication Password
-    default: "Password123!"
-    display:
-      group: nginx_settings
-      index: 10
 
 # Web Server Configuration
   enable_http_redirect:
@@ -158,8 +182,11 @@ inputs:
     allow_update: true
     display_label: Enable HTTP Redirect
     description: |
-      Enable HTTP Redirect
+      Redirect plain HTTP (port 80) requests to HTTPS.
     default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
     display:
       group: nginx_settings
       index: 11
@@ -171,8 +198,11 @@ inputs:
     allow_update: true
     display_label: Nginx Port
     description: |
-      Nginx Port
+      TCP port NGINX serves HTTPS on.
     default: 443
+    constraints:
+      - in_range: [1, 65535]
+        error_message: Must be a TCP port between 1 and 65535.
     display:
       group: nginx_settings
       index: 12
@@ -184,8 +214,11 @@ inputs:
     allow_update: true
     display_label: Nginx Browser Title
     description: |
-      Nginx Browser Title
+      Title shown in the browser tab.
     default: "Artifact Server"
+    constraints:
+      - pattern: ^[^'"]{1,64}$
+        error_message: Must be 1 to 64 characters, without quotes.
     display:
       group: nginx_settings
       index: 13
@@ -194,11 +227,14 @@ inputs:
     type: string
     hidden: false
     required: true
-    allow_update: true    
+    allow_update: true
     display_label: Nginx Body Title
     description: |
-      Nginx Body Title
+      Heading shown on the page.
     default: "Artifact Server"
+    constraints:
+      - pattern: ^[^'"]{1,64}$
+        error_message: Must be 1 to 64 characters, without quotes.
     display:
       group: nginx_settings
       index: 14
@@ -210,8 +246,11 @@ inputs:
     allow_update: true
     display_label: Debug Logging
     description: |
-      Set to 0 or 1 to enable or disable debug logging
+      Set to 1 to enable install-script debug logging, or 0 to disable it.
     default: 0
+    constraints:
+      - valid_values: [0, 1]
+        error_message: Must be 0 or 1.
     display:
       group: nginx_settings
       index: 15

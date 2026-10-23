@@ -1,8 +1,3 @@
-imports:
-  - plugin:edge-plugin?version= >=3.3.17.0,<4.0.0.0
-  - plugin:utilities-plugin?version= >=3.1.4.0,<4.0.0.0
-  - plugin:fabric-plugin?version= >=3.4.2.0,<4.0.0.0
-
 node_templates:
   ssh_keys:
     type: dell.nodes.keys.RSAKey
@@ -29,7 +24,12 @@ node_templates:
         artifact:
           path: { get_input: binary_image_url }
           username: { get_input: binary_image_access_user }
-          access_token: { get_secret: { get_input: binary_image_access_token } }
+          # Path into the Binary Configuration secret (the edge-plugin reads
+          # the binary_image_access_token field), not a token value.
+          access_token:
+            get_secret:
+              - { get_input: os_image_secret }
+              - binary_image_access_token
         version: { get_input: binary_image_version }
     interfaces:
       dell.interfaces.lifecycle:
@@ -43,6 +43,9 @@ node_templates:
           implementation:
             edge.nativeedge_plugin.tasks.delete_binary
 
+  # Computes network, serial-port and password runtime properties for the
+  # VM. Nothing is created outside DAP, so there is nothing to undo on
+  # uninstall (no delete/stop).
   prepare_config:
     type: dell.nodes.ApplicationModule
     interfaces:
@@ -69,6 +72,8 @@ node_templates:
           inputs:
             vm_password: { get_secret: { get_input: vm_password } }
 
+  # Renders the cloud-config into runtime properties only. It is consumed
+  # by the VM, and removing the VM reverts it (no delete).
   cloudinit:
     type: dell.nodes.CloudInit.CloudConfig
     properties:
@@ -176,6 +181,8 @@ node_templates:
        - type: dell.relationships.depends_on
          target: prepare_config
 
+  # Resolves the Endpoint proxy settings and reads the VM IP into runtime
+  # properties. Nothing to undo on uninstall (no delete/stop).
   vm_info:
     type: dell.nodes.Root
     interfaces:
