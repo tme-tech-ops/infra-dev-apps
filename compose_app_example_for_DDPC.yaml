@@ -10,7 +10,7 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - plugin:edge-plugin?version= >=3.3.17.0,<4.0.0.0
+  - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
   - compose_app/definitions.yaml
   - compose_app/inputs.yaml
   - compose_app/capabilities.yaml

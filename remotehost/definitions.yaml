@@ -1,8 +1,42 @@
-imports:
-  - plugin:fabric-plugin?version= >=3.4.2.0,<4.0.0.0
+dsl_definitions:
+
+  # Direct SSH to the remote host (no DDPC Endpoint proxy).
+  remote_connection: &remote_connection
+    host_string: { get_input: remote_host }
+    user: { get_input: remote_username }
+    key: { get_secret: { get_input: ssh_private_key } }
+    port: { get_input: remote_port }
+
+  # Fabric exports shell_env values unquoted, so the credentials are
+  # single-quote-wrapped to survive spaces and shell metacharacters.
+  nginx_install_env: &nginx_install_env
+    ## Self-Signed Certificate info
+    DURATION_DAYS: { get_input: duration_days }
+    ARTIFACT_COMMON_NAME: { get_input: common_name }
+    COUNTRY: { get_input: country }
+    STATE: { get_input: state }
+    LOCATION: { get_input: location }
+    ORGANIZATION: { get_input: organization }
+    ## Basic Authentication info
+    NGINX_HTUSER:
+      concat:
+        - "'"
+        - { get_secret: [{ get_input: nginx_credentials_secret }, username] }
+        - "'"
+    NGINX_HTPASS:
+      concat:
+        - "'"
+        - { get_secret: [{ get_input: nginx_credentials_secret }, password] }
+        - "'"
+    ## TCP Port and Server titles
+    ENABLE_HTTP_REDIRECT: { get_input: enable_http_redirect }
+    NGINX_PORT: { get_input: nginx_port }
+    BROWSER_TITLE: { concat: ["'", { get_input: browser_title }, "'"] }
+    BODY_TITLE: { concat: ["'", { get_input: body_title }, "'"] }
+    DEBUG: { get_input: nginx_debug }
 
 node_templates:
-  
+
   install_file_server:
     type: dell.nodes.Root
     interfaces:
@@ -17,40 +51,8 @@ node_templates:
               - sudo chmod +x nginx-static-files/install_nginx.sh
               - sudo -E ./nginx-static-files/install_nginx.sh
             fabric_env:
-              shell_env:
-                ## Self-Signed Certificate info
-                DURATION_DAYS: { get_input: duration_days }
-                ARTIFACT_COMMON_NAME: { get_input: common_name }
-                COUNTRY: { get_input: country }
-                STATE: { get_input: state }
-                LOCATION: { get_input: location }
-                ORGANIZATION: { get_input: organization }
-                ## Basic Authentication info
-                NGINX_HTUSER: { get_input: nginx_htuser }
-                NGINX_HTPASS: { get_input: nginx_htpass }
-                ## TCP Port and Server titles
-                ENABLE_HTTP_REDIRECT: { get_input: enable_http_redirect }
-                NGINX_PORT: { get_input: nginx_port }
-                BROWSER_TITLE: { get_input: browser_title }
-                BODY_TITLE: { get_input: body_title }
-                ## Scirpt Execution options
-                # INSTALL_SERVER: { get_input: install_server }
-                # UPDATE_SERVER: { get_input: update_server }
-                # DELETE_SERVER: { get_input: delete_server }
-                # OFFLINE_PREP: { get_input: offline_prep }
-                DEBUG: { get_input: nginx_debug }
-                ## Update Params
-                # ADD_OR_UPDATE_USER: { get_input: add_or_update_user}
-                # UPDATE_SSL: { get_input: update_ssl}
-                # GEN_NEW_CERT: { get_input: gen_new_cert}
-                # UPDATE_CERT_PATH: { get_input: update_cert_path}
-                # UPDATE_CERT_KEY_PATH: { get_input: update_cert_key_path}
-                ## Delete Params
-                # DELETE_DATA: { get_input: delete_data}
-              host_string: { get_input: remote_host }
-              user: { get_input: remote_username }
-              key: { get_secret: { get_input: ssh_private_key } }
-              port: { get_input: remote_port }
+              <<: *remote_connection
+              shell_env: *nginx_install_env
             proxy_settings:
               disable: true
         delete:
@@ -63,15 +65,11 @@ node_templates:
               - sudo -E ./nginx-static-files/install_nginx.sh
               - rm -rf nginx-static-files
             fabric_env:
+              <<: *remote_connection
               shell_env:
                 INSTALL_SERVER: "false"
                 DELETE_SERVER: "true"
                 DELETE_DATA: "true"
                 DEBUG: { get_input: nginx_debug }
-              host_string: { get_input: remote_host }
-              user: { get_input: remote_username }
-              key: { get_secret: { get_input: ssh_private_key } }
-              port: { get_input: remote_port }
             proxy_settings:
               disable: true
-

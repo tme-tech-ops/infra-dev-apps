@@ -5,10 +5,12 @@ description: >
 
 imports:
   - dell/types/types.yaml
+  - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
+  - plugin:utilities-plugin?version= >=3.2.3.0,<4.0.0.0
+  - plugin:fabric-plugin?version= >=3.4.3.0,<4.0.0.0
   - vm/definitions.yaml
   - vm/inputs.yaml
   - vm/outputs.yaml
-
 
 input_groups:
   artifact:
@@ -62,7 +64,6 @@ input_groups:
       - dns2
       - use_nat2
       - port_forward_rules2
-
 
 labels:
   csys-obj-type:
