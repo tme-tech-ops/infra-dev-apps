@@ -1,7 +1,7 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  This blueprint creates a Virtual Machine on a NativeEdge Endpoint and deploys MQTT and Node-Red contaners and automates setting up a simple Node-Red flow.
+  This blueprint creates a Virtual Machine on a Dell Distributed Private Cloud (DDPC) Endpoint and deploys MQTT and Node-Red contaners and automates setting up a simple Node-Red flow.
 
 imports:
   - dell/types/types.yaml
@@ -30,7 +30,7 @@ input_groups:
       - registry_url
       - registry_credentials
   vm:
-    display_label: NativeEdge Virtual Machine
+    display_label: DDPC Virtual Machine
     collapsible: true
     index: 2
     inputs:
@@ -90,7 +90,7 @@ labels:
       - environment
   target_environment:
     values:
-      - nativeedge
+      - ddpc
   vendor:
     values:
       - DELL
@@ -99,9 +99,9 @@ labels:
       - EXAMPLE-MQTT-NR
   version:
     values:
-      - "3.2.0"
+      - "4.0.0"
 
 blueprint_labels:
   env:
     values:
-      - ned
+      - ddpc

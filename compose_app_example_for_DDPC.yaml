@@ -1,10 +1,10 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  Deploys a user-supplied, compose-style container definition on a NativeEdge
-  Endpoint using NativeEdgeCompose. The definition is validated against the
-  compose features NativeEdge supports before anything is sent to the
-  endpoint. Optionally logs the endpoint in to a private registry first
+  Deploys a user-supplied, compose-style container definition on a Dell
+  Distributed Private Cloud (DDPC) Endpoint using the edge-plugin
+  NativeEdgeCompose node type. The definition is validated against the
+  compose features DDPC supports before anything is sent to the endpoint. Optionally logs the endpoint in to a private registry first
   (basic-auth secret). Supports Day-2 changes to the definition through
   deployment update.
 
@@ -39,7 +39,7 @@ labels:
       - environment
   target_environment:
     values:
-      - nativeedge
+      - ddpc
   vendor:
     values:
       - DELL
@@ -48,9 +48,9 @@ labels:
       - GENERIC-COMPOSE
   version:
     values:
-      - "1.0.6"
+      - "1.1.0"
 
 blueprint_labels:
   env:
     values:
-      - ned
+      - ddpc

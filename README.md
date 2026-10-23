@@ -1,14 +1,14 @@
 # Multi-purpose Example Blueprint
 
-This blueprint provides five example deployments for the purpose of NativeEdge blueprint demonstration and training. When uploading the blueprint, the user may choose from five deployment options. Three deployments leverage an Ubuntu 22.04 cloudinit VM on a NativeEdge Endpoint, one deploys bare-metal containers directly on the NativeEdge Endpoint, and one deploys to a remote 3rd-party host.
+This blueprint provides six example deployments for the purpose of Dell Automation Platform (DAP) blueprint demonstration and training, mainly targeting Dell Distributed Private Cloud (DDPC). When uploading the blueprint, the user may choose from six deployment options. Three deployments leverage an Ubuntu 22.04 cloudinit VM on a DDPC Endpoint, two deploy bare-metal containers directly on the DDPC Endpoint, and one deploys to a remote 3rd-party host.
 
 Deployment options:
-1. `simple_vm_example_for_NED.yaml` - Deploys a basic Ubuntu VM on a NativeEdge Endpoint. Provides VM login details on completion.
-2. `mqtt_nodered_example_for_NED.yaml` - Deploys a VM, installs Docker, and runs Node-Red and MQTT containers with a simple Node-Red flow configured.
-3. `nginx_app_example_for_NED.yaml` - Deploys NGINX with SSL and basic authentication on an existing `simple_vm` deployment, providing a web page and simple artifact repository.
-4. `container_based_example_for_NED.yaml` - Deploys Node-Red, InfluxDB, and Grafana containers directly on a NativeEdge Endpoint using NativeEdgeCompose.
-5. `compose_app_example_for_NED.yaml` - Deploys **any** user-supplied compose-style container definition directly on a NativeEdge Endpoint using NativeEdgeCompose, with optional private-registry login and Day-2 updates.
-6. `remote_host_example.yaml` - Uses the Fabric plugin to install NGINX with SSL and basic authentication on a remote host outside of NativeEdge.
+1. `simple_vm_example_for_DDPC.yaml` - Deploys a basic Ubuntu VM on a DDPC Endpoint. Provides VM login details on completion.
+2. `mqtt_nodered_example_for_DDPC.yaml` - Deploys a VM, installs Docker, and runs Node-Red and MQTT containers with a simple Node-Red flow configured.
+3. `nginx_app_example_for_DDPC.yaml` - Deploys NGINX with SSL and basic authentication on an existing `simple_vm` deployment, providing a web page and simple artifact repository.
+4. `container_based_example_for_DDPC.yaml` - Deploys Node-Red, InfluxDB, and Grafana containers directly on a DDPC Endpoint using the edge-plugin `NativeEdgeCompose` node type.
+5. `compose_app_example_for_DDPC.yaml` - Deploys **any** user-supplied compose-style container definition directly on a DDPC Endpoint using the edge-plugin `NativeEdgeCompose` node type, with optional private-registry login and Day-2 updates.
+6. `remote_host_example.yaml` - Uses the Fabric plugin to install NGINX with SSL and basic authentication on a remote host outside of DDPC.
 
 Key features:
 - Minimal user input to showcase the simplicity of blueprint deployment
@@ -25,24 +25,24 @@ Key features:
 ## Deployment Prerequisites
 
 *For VM based deployments (simple_vm, mqtt_nodered, nginx_app)*
-1. An Orchestrator running on version 1.0.0.0 or higher
-2. A NativeEdge Endpoint onboarded
-3. A bridged or NAT virtual network segment on the NativeEdge Endpoint
+1. A DAP Orchestrator managing a DDPC Endpoint running DDPC 4.3.0.0 (validated version)
+2. A DDPC Endpoint onboarded
+3. A bridged or NAT virtual network segment on the DDPC Endpoint
 4. An Ubuntu Server LTS 22.04 cloud image (default from ubuntu.com)
 5. Internet access for the VM to install Docker Engine
 6. Internet access to pull Node-Red and MQTT containers, or access to the containers through a local registry
 7. Internet access to install NGINX and apache2-utils via apt-get package manager
 
-*For bare-metal container deployments (container_based)*
-1. A NativeEdge Orchestrator running on version 1.0.0.0 or higher
-2. A NativeEdge Endpoint onboarded
+*For bare-metal container deployments (container_based, compose_app)*
+1. A DAP Orchestrator managing a DDPC Endpoint running DDPC 4.3.0.0 (validated version)
+2. A DDPC Endpoint onboarded
 3. Internet access to pull Node-Red, Grafana, and InfluxDB containers, or access to the containers through a local registry
 
 *For remote host deployments (remote_host)*
-1. A NativeEdge Orchestrator running on version 1.0.0.0 or higher
+1. A DAP Orchestrator
 2. Internet access to install NGINX packages
 3. A remote host running Ubuntu 22.04 or higher with a public SSH key in the authorized_keys list (`~/.ssh/authorized_keys`)
-4. A secret created in the NativeEdge Orchestrator for both the matching private key and sudo password of the remote host
+4. A secret created in the DAP Orchestrator for both the matching private key and sudo password of the remote host
 5. The user must be root, or be a sudo user configured as `ALL=(ALL) NOPASSWD:ALL`
 
 ### Dell Automation Platform Secrets
@@ -118,8 +118,8 @@ Password Schema: YourSecurePassword
 
 ## Getting Started
 
-1. Upload the blueprint directory to the Orchestrator from **Infrastructure > Blueprints** and select the corresponding YAML file for the desired deployment (`simple_vm_example_for_NED.yaml`, `nginx_app_example_for_NED.yaml`, `mqtt_nodered_example_for_NED.yaml`, `container_based_example_for_NED.yaml`, or `remote_host_example.yaml`).
-2. Verify the Endpoint has a virtual network configured (bridged or NAT). *Not applicable for remote_host or container_based.*
+1. Upload the blueprint directory to the Orchestrator from **Infrastructure > Blueprints** and select the corresponding YAML file for the desired deployment (`simple_vm_example_for_DDPC.yaml`, `nginx_app_example_for_DDPC.yaml`, `mqtt_nodered_example_for_DDPC.yaml`, `container_based_example_for_DDPC.yaml`, `compose_app_example_for_DDPC.yaml`, or `remote_host_example.yaml`).
+2. Verify the Endpoint has a virtual network configured (bridged or NAT). *Not applicable for remote_host, container_based or compose_app.*
 3. From the blueprint inventory, deploy by selecting the blueprint from the list and clicking **Deploy**.
 4. Select the Endpoint deployment target. *Not applicable for remote_host.*
 5. Fill out the deployment modal with the required inputs, modifying the defaults and optional inputs if needed.
@@ -187,13 +187,13 @@ This blueprint is designed with customization in mind and may be tailored to spe
 
 ### `container_based` directory
 
-- `definitions.yaml` — Contains logic for running the NativeEdgeCompose node for deploying containers directly on the NativeEdge Endpoint.
+- `definitions.yaml` — Contains logic for running the edge-plugin `NativeEdgeCompose` node type for deploying containers directly on the DDPC Endpoint.
 - The `compose/container_compose.yaml` file may be modified to use different container images or add additional services based on the use case.
 
 ### `compose_app` directory
 
 - Paste a compose definition into **Compose Definition**; `${VAR}` values come from **Compose Environment**.
-- `scripts/compose_ops.py` validates the definition against the compose features NativeEdge supports *before* anything is sent to the endpoint and reports every problem at once. Not supported on NativeEdge: privileged mode, capabilities, custom networks, bind mounts, `build`, healthchecks, image digests, IP-bound/ranged/long-syntax ports, and bare image names (use `docker.io/library/nginx:alpine`, not `nginx:alpine`). Devices use the endpoint peripheral alias (`COM-1:/dev/ttyS0`). `$$` is passed literally.
+- `scripts/compose_ops.py` validates the definition against the compose features DDPC supports *before* anything is sent to the endpoint and reports every problem at once. Not supported on DDPC: privileged mode, capabilities, custom networks, bind mounts, `build`, healthchecks, image digests, IP-bound/ranged/long-syntax ports, and bare image names (use `docker.io/library/nginx:alpine`, not `nginx:alpine`). Devices use the endpoint peripheral alias (`COM-1:/dev/ttyS0`). `$$` is passed literally.
 - **Registry Login** (optional) logs the endpoint in to a private registry using a `basic_auth_credentials` secret. The login is endpoint-wide and is not reverted on uninstall.
 - **Day-2:** changing the definition via deployment update recreates the containers (the stack is briefly down; named-volume data is kept). Invalid changes fail the update without touching the running stack. Drift detection covers both definition changes and container state (e.g. an exited container); a no-change update heals container drift. The `update` task of `nativeedge_compose` is *expected* to log a failure — that is what triggers the recreate.
 - **Updating from the DAP UI (Update Deployment → Advanced):**
@@ -235,3 +235,7 @@ When using NAT Port Forward Rules, the following is required:
 - `service_type` must be `HTTP`, `SSH`, or `CUSTOM`
 - `vm_ip` may be left blank if DHCP is used
 - `vm_port` is the local port of the application to forward
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).

@@ -1,7 +1,7 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  This deploys nodered, influxdb, and grafana containers on a NativeEdge Endpoint using NativeEdgeCompose
+  This deploys nodered, influxdb, and grafana containers on a Dell Distributed Private Cloud (DDPC) Endpoint using the edge-plugin NativeEdgeCompose node type
 
 imports:
   - dell/types/types.yaml
@@ -39,7 +39,7 @@ labels:
       - environment
   target_environment:
     values:
-      - nativeedge
+      - ddpc
   vendor:
     values:
       - DELL
@@ -48,9 +48,9 @@ labels:
       - EXAMPLE-CONTAINER
   version:
     values:
-      - "3.2.0"
+      - "4.0.0"
 
 blueprint_labels:
   env:
     values:
-      - ned
+      - ddpc

@@ -4,7 +4,7 @@ services:
     container_name: ${NODERED_NAME:-nodered}
     restart: unless-stopped
     #devices:
-      # your serial port name. See NED Hardware/Peripherals view to learn serial port names
+      # your serial port name. See the DDPC endpoint Hardware/Peripherals view to learn serial port names
       #- COM-1:/dev/ttyS0 # or - ${SERIAL_PORT:-COM-1}:/dev/ttyS0
     ports:
       - "1880:1880"
