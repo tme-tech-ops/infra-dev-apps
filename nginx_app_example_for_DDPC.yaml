@@ -41,20 +41,17 @@ labels:
   csys-obj-type:
     values:
       - environment
-  target_environment:
+  env:
     values:
-      - nativeedge
-  vendor:
-    values:
-      - DELL
+      - ddpc
   solution:
     values:
-      - EXAMPLE-NGINX
+      - tme-tech-ops
   version:
     values:
-      - "3.2.0"
+      - "4.0.0"
 
 blueprint_labels:
   env:
     values:
-      - ned
+      - ddpc

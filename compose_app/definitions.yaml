@@ -9,7 +9,7 @@ dsl_definitions:
 
 node_templates:
 
-  # Validates the definition against the compose features NativeEdge supports
+  # Validates the definition against the compose features DDPC supports
   # and publishes services / published_ports for the capabilities.
   compose_definition:
     type: dell.nodes.Root

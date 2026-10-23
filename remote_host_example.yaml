@@ -48,15 +48,12 @@ labels:
   csys-obj-type:
     values:
       - environment
-  target_environment:
+  env:
     values:
       - remote
-  vendor:
-    values:
-      - DELL
   solution:
     values:
-      - EXAMPLE-REMOTE-HOST
+      - tme-tech-ops
   version:
     values:
       - "3.2.0"

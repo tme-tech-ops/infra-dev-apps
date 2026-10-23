@@ -29,7 +29,7 @@ capabilities:
         - "_private"
 
   # endpoint_NAT_ip:
-  #   description: NativeEdge Endpoint Default Host Network IP
+  #   description: DDPC Endpoint Default Host Network IP
   #   value:
   #     concat:
   #       - jmespath:

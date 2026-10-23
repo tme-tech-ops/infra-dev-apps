@@ -41,10 +41,10 @@ SERVICE_KEYS = {
     "platform",
 }
 HINTS = {
-    "privileged": "privileged containers are not supported on NativeEdge",
-    "cap_add": "Linux capabilities cannot be changed on NativeEdge",
-    "cap_drop": "Linux capabilities cannot be changed on NativeEdge",
-    "security_opt": "security options are not supported on NativeEdge",
+    "privileged": "privileged containers are not supported on DDPC",
+    "cap_add": "Linux capabilities cannot be changed on DDPC",
+    "cap_drop": "Linux capabilities cannot be changed on DDPC",
+    "security_opt": "security options are not supported on DDPC",
     "user": "running as a specific user is not supported; build it into the image",
     "network_mode": "custom networking is not supported; publish ports with 'ports'",
     "networks": "custom networks are not supported; services share the default network",
@@ -57,7 +57,7 @@ HINTS = {
     "secrets": "compose secrets are not supported",
     "configs": "compose configs are not supported",
     "healthcheck": "healthchecks are not supported; bake HEALTHCHECK into the image",
-    "gpus": "GPU passthrough is not supported for compose on NativeEdge",
+    "gpus": "GPU passthrough is not supported for compose on DDPC",
     "include": "multi-file compose is not supported",
 }
 
@@ -146,7 +146,7 @@ def validate(text, env, registry=None):
     for var in sorted({m.group(1) for m in _VAR_BARE.finditer(substituted)} - set(env)):
         warnings.append(f"${var} is not substituted and will be passed literally")
     if "$$" in substituted:
-        warnings.append("'$$' is passed to the container literally (NativeEdge does not apply the compose "
+        warnings.append("'$$' is passed to the container literally (DDPC does not apply the compose "
                         "'$$' -> '$' unescape); a shell command containing '$$(...)' will fail")
 
     try:
@@ -186,7 +186,7 @@ def validate(text, env, registry=None):
             continue
         for key in svc:
             if key not in SERVICE_KEYS and not str(key).startswith("x-"):
-                errors.append(f"{path}.{key}: not supported on NativeEdge{_hint(key)}")
+                errors.append(f"{path}.{key}: not supported on DDPC{_hint(key)}")
         _check_service(path, name, svc, services, declared_volumes, seen_ports, seen_names, errors, warnings)
     return errors, warnings, data, substituted
 
@@ -279,7 +279,7 @@ def _check_service(path, name, svc, services, declared_volumes, seen_ports, seen
     _check_list(path, "volumes", svc, errors)
     for i, vol in enumerate(svc.get("volumes") if isinstance(svc.get("volumes"), list) else []):
         if isinstance(vol, str) and vol[:1] in ("/", ".", "~"):
-            errors.append(f"{path}.volumes[{i}]: bind mounts are not supported on NativeEdge; use a named volume")
+            errors.append(f"{path}.volumes[{i}]: bind mounts are not supported on DDPC; use a named volume")
             continue
         match = VOLUME_RE.match(vol) if isinstance(vol, str) else None
         if not match:
@@ -415,7 +415,7 @@ def _applied_compose():
 
 def _fail(errors):
     raise NonRecoverableError(
-        f"Compose definition is invalid or not supported on NativeEdge ({len(errors)} problem(s)):\n  - "
+        f"Compose definition is invalid or not supported on DDPC ({len(errors)} problem(s)):\n  - "
         + "\n  - ".join(errors))
 
 
@@ -558,7 +558,7 @@ def do_recreate_gate():
     if errors:
         _fail(errors)
     raise NonRecoverableError(
-        "EXPECTED: the NativeEdge Compute Service has no in-place compose update, so this update "
+        "EXPECTED: the DDPC Compute Service has no in-place compose update, so this update "
         "intentionally fails and the update workflow recreates the compose with the new definition "
         "(delete + create). The stack is briefly unavailable while it is recreated.")
 

@@ -7,7 +7,7 @@ inputs:
     display_label: Compose Definition
     description: |
       Compose-style YAML defining the containers to run on the endpoint.
-      Only the compose features NativeEdge supports are accepted: images must
+      Only the compose features DDPC supports are accepted: images must
       include a registry or namespace (e.g. docker.io/library/nginx:alpine),
       ports must be quoted "HOST:CONTAINER[/tcp|udp]" strings, volumes must be
       named volumes declared under top-level volumes, and devices must use the
