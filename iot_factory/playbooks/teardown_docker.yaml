@@ -1,0 +1,85 @@
+---
+# Uninstall: removes Docker only if install_docker.yaml installed it (marker
+# file). A Docker engine that existed before the blueprint is left running.
+- name: IoT Smart Factory - remove Docker
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    marker_dir: /etc/iot-factory
+    installed_marker: /etc/iot-factory/docker-installed-by-blueprint
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - docker-ce-rootless-extras
+
+  tasks:
+    - name: Remove Docker
+      block:
+        - name: Check whether this blueprint installed Docker
+          ansible.builtin.stat:
+            path: "{{ installed_marker }}"
+          register: marker
+
+        - name: Remove Docker installed by this blueprint
+          when: marker.stat.exists
+          block:
+            - name: Stop Docker
+              ansible.builtin.systemd_service:
+                name: "{{ item }}"
+                state: stopped
+                enabled: false
+              loop: [docker.socket, docker.service, containerd.service]
+              failed_when: false
+
+            - name: Purge Docker packages
+              ansible.builtin.apt:
+                name: "{{ docker_packages }}"
+                state: absent
+                purge: true
+                autoremove: true
+              register: apt_purge
+              retries: 3
+              delay: 10
+              until: apt_purge is succeeded
+
+            - name: Remove the Docker apt repository and key
+              ansible.builtin.file:
+                path: "{{ item }}"
+                state: absent
+              loop:
+                - /etc/apt/sources.list.d/docker.sources
+                - /etc/apt/keyrings/docker.asc
+
+            - name: Remove Docker and containerd data
+              ansible.builtin.file:
+                path: "{{ item }}"
+                state: absent
+              loop:
+                - /var/lib/docker
+                - /var/lib/containerd
+                - /etc/docker
+
+        - name: Remove the marker directory
+          ansible.builtin.file:
+            path: "{{ marker_dir }}"
+            state: absent
+
+        - name: Docker removal finished
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [install_docker] UNINSTALL OK:
+              {{ 'Docker packages, repository and data removed.' if marker.stat.exists
+                 else 'Docker was not installed by this blueprint and was left in place.' }}
+
+      rescue:
+        - name: Docker removal failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [install_docker] UNINSTALL FAILED at '{{ ansible_failed_task.name }}':
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
+              Hint: check for a held dpkg lock (another apt process) on the host.

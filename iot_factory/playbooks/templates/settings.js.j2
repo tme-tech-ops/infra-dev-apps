@@ -1,0 +1,51 @@
+// Managed by the infra-dev-apps IoT Smart Factory blueprint. Changes are
+// overwritten on the next deployment run.
+const fs = require('fs');
+
+function readSecret(name) {
+    try {
+        return fs.readFileSync('/run/secrets/' + name, 'utf8').trim();
+    } catch (err) {
+        return '';
+    }
+}
+
+module.exports = {
+    uiPort: 1880,
+    flowFile: 'flows.json',
+    flowFilePretty: true,
+    credentialSecret: false,
+
+    // Editor and admin API login.
+    adminAuth: {
+        type: 'credentials',
+        users: [{
+            username: {{ admin_username | to_json }},
+            password: {{ nodered_admin_hash | to_json }},
+            permissions: '*'
+        }]
+    },
+
+    // Basic auth for the HTTP-in endpoints (/api/fault, /api/status).
+    httpNodeAuth: {
+        user: {{ admin_username | to_json }},
+        pass: {{ nodered_admin_hash | to_json }}
+    },
+
+    // The InfluxDB token is read from the compose secret, never from flows.json.
+    functionGlobalContext: {
+        influxToken: readSecret('influx_token')
+    },
+
+    functionExternalModules: false,
+    diagnostics: { enabled: false, ui: false },
+    runtimeState: { enabled: false, ui: false },
+    logging: {
+        console: { level: 'info', metrics: false, audit: false }
+    },
+    editorTheme: {
+        projects: { enabled: false },
+        tours: false,
+        palette: { catalogues: [] }
+    }
+};

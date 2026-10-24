@@ -1,0 +1,112 @@
+---
+# Joins this factory to a hub factory with a Mosquitto bridge: this line's
+# telemetry flows to the hub (its Grafana, alerts and control room see it), and
+# the hub can send fault and chaos commands back to this line.
+- name: IoT Smart Factory - join hub
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+    topic_root: "factory/{{ factory_site }}/{{ factory_line }}"
+    bridge_name: "hub-{{ factory_site }}-{{ factory_line }}"
+    bridge_clientid: "iot-factory-bridge-{{ factory_site }}-{{ factory_line }}"
+    bridge_file: "{{ stack_dir }}/mosquitto/config/conf.d/hub-bridge.conf"
+
+  tasks:
+    - name: Join the hub
+      block:
+        - name: Check the hub accepts joins
+          ansible.builtin.assert:
+            that: hub_accepts_joins | bool
+            fail_msg: >-
+              The hub deployment does not accept joins. Redeploy the hub with Accept Joins set
+              to true and a Bridge Credentials secret.
+            quiet: true
+
+        - name: Check this line is not the hub's own line
+          ansible.builtin.assert:
+            that: hub_topic_root != topic_root
+            fail_msg: >-
+              This factory uses the same site/line as the hub ({{ topic_root }}). Give the
+              joining factory a different Factory Site or Production Line.
+            quiet: true
+
+        - name: Check the hub MQTT port is reachable from this host
+          ansible.builtin.wait_for:
+            host: "{{ hub_host }}"
+            port: "{{ hub_port | int }}"
+            timeout: 15
+
+        - name: Write the bridge configuration
+          ansible.builtin.copy:
+            dest: "{{ bridge_file }}"
+            owner: "1883"
+            group: "1883"
+            mode: "0600"
+            content: |
+              # Managed by the infra-dev-apps IoT Smart Factory blueprint (join_hub).
+              connection {{ bridge_name }}
+              address {{ hub_host }}:{{ hub_port }}
+              remote_clientid {{ bridge_clientid }}
+              remote_username {{ hub_username }}
+              remote_password {{ hub_password }}
+              cleansession true
+              restart_timeout 5 30
+              topic {{ topic_root }}/+/telemetry out 0
+              topic {{ topic_root }}/+/cmd in 0
+              topic {{ topic_root }}/chaos in 0
+          register: bridge_conf
+          no_log: true
+
+        - name: Restart the broker to load the bridge
+          when: bridge_conf.changed
+          ansible.builtin.command:
+            cmd: docker compose restart mosquitto
+            chdir: "{{ stack_dir }}"
+          changed_when: true
+
+        - name: Wait for the stack to be healthy
+          ansible.builtin.command:
+            cmd: docker compose up --detach --wait --wait-timeout 120
+            chdir: "{{ stack_dir }}"
+          changed_when: false
+
+        - name: Wait for the bridge to connect to the hub
+          ansible.builtin.command:
+            cmd: >-
+              docker compose exec -T mosquitto mosquitto_sub -h localhost -p 1884
+              -t $SYS/broker/connection/{{ bridge_clientid }}/state -C 1 -W 10
+            chdir: "{{ stack_dir }}"
+          register: bridge_state
+          changed_when: false
+          failed_when: false
+          until: bridge_state.stdout | trim == '1'
+          retries: 6
+          delay: 5
+
+        - name: Check the bridge is connected
+          ansible.builtin.assert:
+            that: bridge_state.stdout | trim == '1'
+            fail_msg: >-
+              The bridge to {{ hub_host }}:{{ hub_port }} did not connect. Check that the hub
+              deployment's bridge credentials are correct and the hub broker is running
+              ('docker compose -f {{ stack_dir }}/compose.yaml logs mosquitto' on this host).
+            quiet: true
+
+        - name: Joined the hub
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [join_hub] OK: bridge {{ bridge_name }} connected to {{ hub_host }}:{{ hub_port }}.
+              This line's telemetry now flows to the hub, and the hub can send commands to {{ topic_root }}.
+              Open the hub's Grafana (Site/Line selectors) or control room to see this line.
+
+      rescue:
+        - name: Joining the hub failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [join_hub] FAILED at '{{ ansible_failed_task.name }}':
+              {{ '(details hidden: task handles credentials)' if ansible_failed_result.censored is defined
+                 else ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
+              Hint: the hub deployment must be a running IoT Smart Factory deployment reachable from this host on its MQTT port.

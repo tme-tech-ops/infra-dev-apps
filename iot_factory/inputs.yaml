@@ -1,0 +1,395 @@
+inputs:
+
+# Remote host
+
+  remote_host:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Remote Host IP Or FQDN
+    description: |
+      IP address or FQDN of the Ubuntu 24.04 host the demo is installed on.
+      It must be reachable over SSH from the orchestrator.
+    constraints:
+      - pattern: ^[a-zA-Z0-9]([a-zA-Z0-9.:-]*[a-zA-Z0-9])?$
+        error_message: Must be an IP address or hostname (letters, numbers, dots, colons and hyphens).
+    display:
+      group: remote_host
+      index: 0
+
+  remote_username:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Remote Host Username
+    description: |
+      SSH login user on the remote host. Must be root or have passwordless
+      sudo (ALL=(ALL) NOPASSWD:ALL).
+    constraints:
+      - pattern: ^[a-z_][a-z0-9_-]{0,31}$
+        error_message: Must be a valid Linux username (lowercase letters, digits, underscores, hyphens).
+    display:
+      group: remote_host
+      index: 1
+
+  ssh_private_key:
+    type: secret_key
+    hidden: false
+    allow_update: false
+    display_label: SSH Private Key Secret
+    description: |
+      Name of the SSH private key secret matching an authorized_keys entry
+      on the remote host.
+    constraints:
+      - type: ssh_private_key
+        error_message: Select an SSH private key secret.
+    display:
+      group: remote_host
+      index: 2
+
+  remote_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Remote Host SSH Port
+    description: |
+      TCP port of the SSH server on the remote host.
+    default: 22
+    constraints:
+      - in_range: [1, 65535]
+        error_message: Must be a TCP port between 1 and 65535.
+    display:
+      group: remote_host
+      index: 3
+
+# Smart Factory demo
+
+  stack_admin_credentials:
+    type: secret_key
+    hidden: false
+    allow_update: false
+    display_label: Stack Admin Credentials Secret
+    description: |
+      Name of a Basic Auth Credentials secret. The same login is used for the
+      Node-RED editor and API, Grafana, InfluxDB and the external MQTT user.
+      The password must be at least 8 characters. The username must not
+      contain a colon (:).
+    constraints:
+      - type: basic_auth_credentials
+        error_message: Select a Basic Auth Credentials secret.
+    display:
+      group: factory
+      index: 10
+
+  factory_site:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Factory Site
+    description: |
+      Site name used in MQTT topics, InfluxDB tags and the dashboard
+      (lowercase letters, digits and hyphens).
+    default: hopkinton
+    constraints:
+      - pattern: ^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$
+        error_message: Must be 2 to 32 lowercase letters, digits or hyphens, not starting or ending with a hyphen.
+    display:
+      group: factory
+      index: 11
+
+  factory_line:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Production Line
+    description: |
+      Production line name used in MQTT topics, InfluxDB tags and the
+      dashboard (lowercase letters, digits and hyphens).
+    default: line-1
+    constraints:
+      - pattern: ^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$
+        error_message: Must be 2 to 32 lowercase letters, digits or hyphens, not starting or ending with a hyphen.
+    display:
+      group: factory
+      index: 12
+
+  publish_interval:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Telemetry Interval
+    description: |
+      Seconds between telemetry messages from each simulated machine
+      (1 to 60).
+    default: 2
+    constraints:
+      - in_range: [1, 60]
+        error_message: Must be between 1 and 60 seconds.
+    display:
+      group: factory
+      index: 13
+
+  auto_chaos:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Auto Chaos Mode
+    description: |
+      Inject a random machine fault every few minutes, and clear it again,
+      for unattended booth demos. Leave off to inject faults by hand.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: factory
+      index: 14
+
+  grafana_anonymous_viewer:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Grafana Anonymous Viewer
+    description: |
+      Let anyone who can reach Grafana view the dashboards without logging
+      in (read-only). Useful for a kiosk screen. Editing still needs the
+      stack admin login.
+    default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: factory
+      index: 15
+
+# Service ports
+
+  mqtt_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: MQTT Port
+    description: |
+      Host TCP port of the Mosquitto broker (password protected).
+    default: 1883
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 20
+
+  nodered_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Node-RED Port
+    description: |
+      Host TCP port of the Node-RED editor and fault injection API.
+    default: 1880
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 21
+
+  grafana_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Grafana Port
+    description: |
+      Host TCP port of Grafana.
+    default: 3000
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 22
+
+  influxdb_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: InfluxDB Port
+    description: |
+      Host TCP port of the InfluxDB UI and API.
+    default: 8086
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 23
+
+  mqtt_ws_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: MQTT Websocket Port
+    description: |
+      Host TCP port of the Mosquitto websocket listener used by browser MQTT
+      clients such as MQTTX Web (password protected).
+    default: 9001
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 24
+
+  mqttx_web_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: MQTTX Web Port
+    description: |
+      Host TCP port of MQTTX Web, a browser MQTT client for publishing
+      commands and watching topics.
+    default: 8080
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 25
+
+# Join another factory
+
+  accept_joins:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Accept Joins (Act As Hub)
+    description: |
+      Let other IoT Smart Factory deployments join this one. Opens a bridge
+      listener that only accepts the Bridge Credentials, and only lets them
+      publish telemetry and receive commands.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: join
+      index: 37
+
+  bridge_credentials:
+    type: secret_key
+    hidden: false
+    required: false
+    only_with: accept_joins
+    allow_update: false
+    display_label: Bridge Credentials Secret
+    description: |
+      Name of a Basic Auth Credentials secret that joining factories use to
+      connect. Use a different username than the stack admin login. The
+      password must be at least 8 characters.
+    constraints:
+      - type: basic_auth_credentials
+        error_message: Select a Basic Auth Credentials secret.
+    display:
+      group: join
+      index: 38
+
+  bridge_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Bridge Port
+    description: |
+      Host TCP port of the bridge listener that joining factories connect to.
+    default: 1885
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: join
+      index: 39
+
+  join_hub:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Join A Hub Factory
+    description: |
+      Bridge this factory's line into another IoT Smart Factory deployment
+      (the hub). The hub's Grafana, alerts and control room then show and
+      control this line too. Use a different Factory Site or Production Line
+      than the hub.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: join
+      index: 40
+
+  hub_deployment_id:
+    type: string
+    hidden: false
+    required: false
+    only_with: join_hub
+    allow_update: false
+    display_label: Hub Deployment ID
+    description: |
+      Deployment ID of the hub IoT Smart Factory deployment (deployed with
+      Accept Joins). Its host, bridge port and bridge credentials secret are
+      read from its capabilities.
+    default: ""
+    constraints:
+      - pattern: ^$|^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$
+        error_message: Must be a deployment ID (letters, numbers, dots, underscores, hyphens).
+    display:
+      group: join
+      index: 41
+
+# Ansible
+
+  ansible_debug_level:
+    type: integer
+    hidden: false
+    allow_update: true
+    display_label: Ansible Debug Level
+    description: |
+      Ansible verbosity level (0 to 3). Above 0 adds a lot of output to the
+      deployment logs; use it only to troubleshoot.
+    default: 0
+    constraints:
+      - in_range: [0, 3]
+        error_message: Must be between 0 and 3.
+    display:
+      group: ansible_settings
+      index: 30
+
+  ansible_timeout:
+    type: integer
+    hidden: false
+    allow_update: true
+    display_label: Ansible Timeout
+    description: |
+      SSH connection timeout for Ansible, in seconds (10 to 600).
+    default: 30
+    constraints:
+      - in_range: [10, 600]
+        error_message: Must be between 10 and 600 seconds.
+    display:
+      group: ansible_settings
+      index: 31
+
+  ansible_log_stdout:
+    type: boolean
+    hidden: false
+    allow_update: true
+    display_label: Ansible Log Output
+    description: |
+      Send Ansible task progress (one line per task) to the deployment logs.
+      Failures are always logged, even when this is off.
+    default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: ansible_settings
+      index: 32

@@ -1,0 +1,231 @@
+# InfluxDB template: "IoT Factory - Database Health" dashboard in the InfluxDB UI.
+# Applied by deploy_stack.yaml with `influx apply --stack-id`, so re-runs update it.
+apiVersion: influxdata.com/v2alpha1
+kind: Dashboard
+metadata:
+  name: iot-factory-database-health
+spec:
+  name: IoT Factory - Database Health
+  description: Proves the telemetry bucket is receiving and storing data. Deployed by the infra-dev-apps DAP blueprint.
+  charts:
+    - kind: Markdown
+      name: About
+      note: |
+        ### IoT Smart Factory - database health
+        Node-RED writes every machine reading and every alert into the **telemetry** bucket
+        (org **iot-factory**, 7-day retention). If the numbers on the right are moving, the
+        MQTT -> Node-RED -> InfluxDB pipeline is healthy.
+
+        Explore the raw data in **Data Explorer**: bucket `telemetry`, measurements
+        `machine_telemetry`, `alerts`, `pipeline` and `broker`.
+      xPos: 0
+      yPos: 0
+      width: 4
+      height: 3
+    - kind: Single_Stat
+      name: Readings stored (last 5 min)
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: -5m)
+              |> filter(fn: (r) => r._measurement == "machine_telemetry")
+              |> group()
+              |> count()
+      colors:
+        - name: laser
+          type: text
+          hex: "#00C9FF"
+      decimalPlaces: 0
+      xPos: 4
+      yPos: 0
+      width: 2
+      height: 3
+    - kind: Single_Stat
+      name: Alerts stored (last hour)
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: -1h)
+              |> filter(fn: (r) => r._measurement == "alerts" and r._field == "message")
+              |> group()
+              |> count()
+      colors:
+        - name: fire
+          type: text
+          hex: "#DC4E58"
+      decimalPlaces: 0
+      xPos: 6
+      yPos: 0
+      width: 2
+      height: 3
+    - kind: Single_Stat
+      name: Lines reporting
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: -1m)
+              |> filter(fn: (r) => r._measurement == "machine_telemetry" and r._field == "health")
+              |> group(columns: ["site", "line"])
+              |> last()
+              |> group()
+              |> count()
+      colors:
+        - name: rainforest
+          type: text
+          hex: "#4ED8A0"
+      decimalPlaces: 0
+      xPos: 8
+      yPos: 0
+      width: 2
+      height: 3
+    - kind: Single_Stat
+      name: Failed writes (since Node-RED start)
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: -5m)
+              |> filter(fn: (r) => r._measurement == "pipeline" and r._field == "influx_writes_failed")
+              |> group()
+              |> last()
+      colors:
+        - name: rainforest
+          type: text
+          hex: "#4ED8A0"
+        - name: fire
+          type: text
+          hex: "#DC4E58"
+          value: 1
+      decimalPlaces: 0
+      xPos: 10
+      yPos: 0
+      width: 2
+      height: 3
+    - kind: Xy
+      name: Ingest rate (readings per minute, by line)
+      geom: line
+      position: overlaid
+      xCol: _time
+      yCol: _value
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+              |> filter(fn: (r) => r._measurement == "machine_telemetry" and r._field == "health")
+              |> group(columns: ["site", "line"])
+              |> aggregateWindow(every: 1m, fn: count, createEmpty: false)
+      axes:
+        - name: x
+        - name: y
+          label: readings / min
+      colors:
+        - name: Nineteen Eighty Four
+          type: scale
+          hex: "#31C0F6"
+        - name: Nineteen Eighty Four
+          type: scale
+          hex: "#A500A5"
+        - name: Nineteen Eighty Four
+          type: scale
+          hex: "#FF7E27"
+      xPos: 0
+      yPos: 3
+      width: 6
+      height: 4
+    - kind: Xy
+      name: MQTT broker load (messages received / min)
+      geom: line
+      position: overlaid
+      xCol: _time
+      yCol: _value
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+              |> filter(fn: (r) => r._measurement == "broker" and r._field == "load_received_1min")
+              |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+      axes:
+        - name: x
+        - name: y
+          label: messages / min
+      colors:
+        - name: Atlantis
+          type: scale
+          hex: "#74D495"
+        - name: Atlantis
+          type: scale
+          hex: "#3F3FBA"
+        - name: Atlantis
+          type: scale
+          hex: "#FF4D9E"
+      xPos: 6
+      yPos: 3
+      width: 6
+      height: 4
+    - kind: Xy
+      name: Temperature by machine
+      geom: line
+      position: overlaid
+      xCol: _time
+      yCol: _value
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+              |> filter(fn: (r) => r._measurement == "machine_telemetry" and r._field == "temperature")
+              |> group(columns: ["line", "machine"])
+              |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+      axes:
+        - name: x
+        - name: y
+          label: C
+      colors:
+        - name: Nineteen Eighty Four
+          type: scale
+          hex: "#31C0F6"
+        - name: Nineteen Eighty Four
+          type: scale
+          hex: "#A500A5"
+        - name: Nineteen Eighty Four
+          type: scale
+          hex: "#FF7E27"
+      xPos: 0
+      yPos: 7
+      width: 6
+      height: 4
+    - kind: Table
+      name: Recent alerts
+      queries:
+        - query: |-
+            from(bucket: "telemetry")
+              |> range(start: -1h)
+              |> filter(fn: (r) => r._measurement == "alerts" and r._field == "message")
+              |> group()
+              |> sort(columns: ["_time"], desc: true)
+              |> limit(n: 20)
+              |> keep(columns: ["_time", "severity", "line", "machine", "_value"])
+      colors:
+        - name: laser
+          type: text
+          hex: "#00C9FF"
+      tableOptions:
+        verticalTimeAxis: true
+      fieldOptions:
+        - fieldName: _time
+          displayName: Time
+          visible: true
+        - fieldName: severity
+          displayName: Severity
+          visible: true
+        - fieldName: line
+          displayName: Line
+          visible: true
+        - fieldName: machine
+          displayName: Machine
+          visible: true
+        - fieldName: _value
+          displayName: Message
+          visible: true
+      xPos: 6
+      yPos: 7
+      width: 6
+      height: 4

@@ -1,0 +1,42 @@
+---
+# Uninstall of join_hub: removes the bridge so this factory stops sending to the hub.
+- name: IoT Smart Factory - leave hub
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+    bridge_file: "{{ stack_dir }}/mosquitto/config/conf.d/hub-bridge.conf"
+
+  tasks:
+    - name: Leave the hub
+      block:
+        - name: Remove the bridge configuration
+          ansible.builtin.file:
+            path: "{{ bridge_file }}"
+            state: absent
+          register: bridge_removed
+
+        - name: Check for the stack compose file
+          ansible.builtin.stat:
+            path: "{{ stack_dir }}/compose.yaml"
+          register: compose_file
+
+        - name: Restart the broker without the bridge
+          when: bridge_removed.changed and compose_file.stat.exists
+          ansible.builtin.command:
+            cmd: docker compose restart mosquitto
+            chdir: "{{ stack_dir }}"
+          changed_when: true
+
+        - name: Left the hub
+          ansible.builtin.debug:
+            msg: "IOT-FACTORY [join_hub] UNINSTALL OK: bridge {{ 'removed' if bridge_removed.changed else 'was not configured' }}."
+
+      rescue:
+        - name: Leaving the hub failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [join_hub] UNINSTALL FAILED at '{{ ansible_failed_task.name }}':
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
