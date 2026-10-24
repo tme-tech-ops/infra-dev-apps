@@ -46,5 +46,5 @@
           ansible.builtin.fail:
             msg: >-
               IOT-FACTORY [deploy_stack] UNINSTALL FAILED at '{{ ansible_failed_task.name }}':
-              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
               Hint: run 'docker compose -f {{ stack_dir }}/compose.yaml down -v' on the host, then re-run uninstall.

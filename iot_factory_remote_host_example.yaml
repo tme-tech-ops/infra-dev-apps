@@ -43,10 +43,19 @@ input_groups:
       - nodered_port
       - grafana_port
       - influxdb_port
+      - mqtt_ws_port
+      - mqttx_web_port
+  join:
+    display_label: Join Another Factory
+    collapsible: true
+    index: 3
+    inputs:
+      - join_hub
+      - hub_deployment_id
   ansible_settings:
     display_label: Ansible Settings
     collapsible: true
-    index: 3
+    index: 4
     inputs:
       - ansible_debug_level
       - ansible_timeout

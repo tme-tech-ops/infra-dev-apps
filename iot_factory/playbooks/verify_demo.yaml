@@ -43,6 +43,27 @@
             url: "{{ nodered_api }}/status"
             status_code: 401
 
+        - name: Check the control room page is served
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:{{ nodered_port }}/control"
+            url_username: "{{ admin_username }}"
+            url_password: "{{ admin_password }}"
+            force_basic_auth: true
+            return_content: true
+          register: control_room
+          failed_when: "'Factory Control Room' not in control_room.content"
+          no_log: true
+
+        - name: Check MQTTX Web is served
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:{{ mqttx_web_port }}/"
+
+        - name: Check the MQTT websocket listener is open
+          ansible.builtin.wait_for:
+            host: 127.0.0.1
+            port: "{{ mqtt_ws_port | int }}"
+            timeout: 10
+
         - name: Inject a jam on robot-03 through the fault API
           ansible.builtin.uri:
             url: "{{ nodered_api }}/fault"
@@ -125,6 +146,7 @@
             msg: >-
               IOT-FACTORY [verify_demo] OK: telemetry flowing on {{ topic_root }}/+/telemetry
               (e.g. {{ sample.machine }} {{ sample.state }} {{ sample.temperature }} C), anonymous MQTT refused,
+              control room, MQTTX Web and the MQTT websocket listener up,
               fault API and alert pipeline working (robot-03 jam raised an alert, then cleared),
               InfluxDB points in the last 10 min: {{ counts | map('reverse') | map('list') | map('join', '=') | join(', ') }},
               Grafana dashboard '{{ dashboard.json.dashboard.title }}' provisioned.
@@ -135,6 +157,6 @@
             msg: >-
               IOT-FACTORY [verify_demo] FAILED at '{{ ansible_failed_task.name }}':
               {{ '(details hidden: task handles credentials)' if ansible_failed_result.censored is defined
-                 else ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+                 else ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
               Hint: on the host, check 'docker compose -f {{ stack_dir }}/compose.yaml logs node-red'
               (simulator and rules engine) and '... logs influxdb'.

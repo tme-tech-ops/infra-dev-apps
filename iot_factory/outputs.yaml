@@ -10,6 +10,26 @@ capabilities:
         - { get_input: grafana_port }
         - '/d/iot-factory/iot-smart-factory?kiosk&refresh=5s'
 
+  control_room_url:
+    description: Factory control room (live line view, fault buttons, scenarios, terminal, live MQTT feed)
+    value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: nodered_port }, '/control'] }
+
+  mqttx_web_url:
+    description: MQTTX Web browser MQTT client (connect to mqtt_websocket_url with the stack admin login)
+    value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: mqttx_web_port }] }
+
+  mqtt_websocket_url:
+    description: MQTT over websockets endpoint for browser clients
+    value: { concat: ['ws://', { get_input: remote_host }, ':', { get_input: mqtt_ws_port }, '/mqtt'] }
+
+  mqtt_host:
+    description: MQTT broker host (used by factories that join this one)
+    value: { get_input: remote_host }
+
+  mqtt_port:
+    description: MQTT broker port (used by factories that join this one)
+    value: { get_input: mqtt_port }
+
   nodered_editor_url:
     description: Node-RED editor (simulator, fault injection buttons and alert rules)
     value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: nodered_port }, '/'] }
@@ -17,7 +37,8 @@ capabilities:
   fault_injection_api:
     description: >-
       Fault injection REST endpoint (basic auth with the stack admin login). POST JSON
-      {"machine":"press-01|cnc-02|robot-03|all","fault":"overheat|bearing|jam|none"}
+      {"machine":"press-01|cnc-02|robot-03|all","fault":"overheat|hydraulic_leak|bearing|tool_wear|jam|misgrip|none"}
+      with optional "site" and "line" to reach a joined factory
     value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: nodered_port }, '/api/fault'] }
 
   mqtt_endpoint:
@@ -31,7 +52,7 @@ capabilities:
     value: { concat: ['factory/', { get_input: factory_site }, '/', { get_input: factory_line }] }
 
   influxdb_url:
-    description: InfluxDB UI and API (org iot-factory, bucket telemetry)
+    description: InfluxDB UI and API (org iot-factory, bucket telemetry, dashboard IoT Factory - Database Health)
     value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: influxdb_port }] }
 
   stack_admin_credentials:

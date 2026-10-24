@@ -48,7 +48,7 @@ Use it to:
 | [`container_based_example_for_DDPC.yaml`](#6-container_based) | Node-RED, InfluxDB and Grafana containers directly on the Endpoint, from a fixed compose file | DDPC Endpoint | edge |
 | [`compose_app_example_for_DDPC.yaml`](#7-compose_app) | **Any** user-supplied compose definition directly on the Endpoint, with an optional registry login and Day-2 updates | DDPC Endpoint | edge |
 | [`remote_host_example.yaml`](#8-remote_host) | NGINX with TLS and basic auth on any SSH-reachable Ubuntu host outside DDPC | none (any orchestrator) | fabric |
-| [`iot_factory_remote_host_example.yaml`](#9-iot_factory) | An IoT Smart Factory demo (Mosquitto, Node-RED line simulator, InfluxDB, Grafana) on a fresh **Ubuntu 24.04** host, installed end-to-end by Ansible over SSH | none (any orchestrator) | ansible |
+| [`iot_factory_remote_host_example.yaml`](#9-iot_factory) | An interactive IoT Smart Factory demo (Mosquitto, Node-RED line simulator and control room, InfluxDB, Grafana, MQTTX Web) on a fresh **Ubuntu 24.04** host, installed end-to-end by Ansible over SSH. Factories can join each other. | none (any orchestrator) | ansible |
 
 ### Core features
 
@@ -103,7 +103,7 @@ infra-dev-apps/
 │   └── scripts/           compose_ops.py (validation, drift, update gate)
 ├── remotehost/            Fabric node templates (no proxy)
 ├── iot_factory/           Ansible node templates (direct SSH)
-│   └── playbooks/         preflight, install/teardown Docker, deploy/teardown/verify stack, templates/, files/ (flows, dashboard), callback_plugins/
+│   └── playbooks/         preflight, install/teardown Docker, deploy/teardown/verify stack, join/leave hub, templates/, files/ (flows, dashboards), callback_plugins/
 └── CHANGELOG.md
 ```
 
@@ -121,7 +121,7 @@ infra-dev-apps/
 | nginx_app | A running **simple_vm** deployment, with internet access from the VM to `github.com` and the Ubuntu apt mirrors |
 | container_based, compose_app | The Endpoint can pull the container images, from the internet (`mirror.gcr.io`, `docker.io`, …) or a local registry |
 | remote_host | An Ubuntu 22.04+ host reachable by SSH from the orchestrator, with `git` installed (minimal Ubuntu images don't include it), a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `github.com` and apt |
-| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 3000 and 8086 (or the ones you choose) must be free |
+| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 3000, 8080, 8086 and 9001 (or the ones you choose) must be free. A joining factory must reach the hub's MQTT port. |
 
 ### Creating secrets
 
@@ -671,46 +671,108 @@ Defined in `remotehost/definitions.yaml`:
 
 ### Description
 
-The collection's showcase demo. Ansible connects to **any SSH-reachable Ubuntu 24.04 host**, starting from a fresh install, and deploys an **IoT Smart Factory**: a simulated packaging line streaming telemetry over MQTT, a rules engine raising alerts, a time-series database and a live Grafana dashboard.
+The collection's showcase demo. Ansible connects to **any SSH-reachable Ubuntu 24.04 host**, starting from a fresh install, and deploys an **IoT Smart Factory**:
+
+```
+ Node-RED "Line Simulator"  --MQTT-->  Mosquitto  --MQTT-->  Node-RED rules engine  -->  InfluxDB  -->  Grafana
+ (3 simulated machines)                   ^   ^               (alerts, health)
+                                          |   +-- browser clients (MQTTX Web, control room) and joined factories (bridge)
+                                          +------ fault commands (buttons, REST, terminal, MQTT)
+```
 
 | Service | Image | Port | Role |
 |---|---|---|---|
-| Mosquitto | `eclipse-mosquitto:2.0.22` | 1883 | MQTT broker. The published listener needs the stack login. An anonymous listener (1884) is reachable only on the compose network. |
-| Node-RED | `nodered/node-red:4.1.1` | 1880 | Line simulator, fault injection, alert rules and InfluxDB writer (core nodes only). Editor and API need the stack login. |
-| InfluxDB 2 | `influxdb:2.7.12` | 8086 | Telemetry and alerts (org `iot-factory`, bucket `telemetry`, 7-day retention) |
-| Grafana | `grafana/grafana-oss:11.6.0` | 3000 | Provisioned InfluxDB datasource and the **IoT Smart Factory** home dashboard |
+| Mosquitto | `eclipse-mosquitto:2.0.22` | 1883, 9001 (websockets) | MQTT broker. Both published listeners need the stack login. An anonymous listener (1884) is reachable only on the compose network. |
+| Node-RED | `nodered/node-red:4.1.1` | 1880 | Line simulator, fault engine, rules engine, InfluxDB writer and the **control room** (`/control`). Core nodes only. |
+| InfluxDB 2 | `influxdb:2.7.12` | 8086 | Telemetry, alerts and pipeline stats (org `iot-factory`, bucket `telemetry`, 7-day retention), plus a **Database Health** dashboard |
+| Grafana | `grafana/grafana-oss:11.6.0` | 3000 | **IoT Smart Factory** home dashboard |
+| MQTTX Web | `emqx/mqttx-web:v1.13.0` | 8080 | Browser MQTT client for publishing commands and watching topics |
+
+![Factory control room](docs/images/iot_factory_control_room.png)
+
+### The line simulator
+
+There is no real hardware. A Node-RED function **pretends to be a packaging line** and publishes what real PLCs or sensors would. Everything after the broker is the same as in a real plant.
+
+The three machines feed each other: **press-01 (hydraulic press) → cnc-02 (CNC mill) → robot-03 (packing robot)**. Every 2 s (configurable), each one publishes temperature, vibration, rpm, power, parts produced, a health score, its state and its build-up signal to `factory/<site>/<line>/<machine>/telemetry`.
+
+| State | Meaning |
+|---|---|
+| RUNNING | Normal |
+| DEGRADED | A fault is building up (warnings) |
+| STOPPED | Jammed, out of hydraulic pressure, or waiting for a tool change |
+| FAULT | Tripped on a safety limit. Latched until the fault is cleared. |
+| STARVED | An upstream machine stopped, so no parts arrive (after a 15 s buffer) |
+
+### Faults
+
+| Machine | Fault | Type | What happens |
+|---|---|---|---|
+| press-01 | `overheat` | sustained | Temperature climbs: warning at 85 °C (~20 s), trip at 95 °C (~40 s) |
+| press-01 | `hydraulic_leak` | sustained | Pressure bleeds from 210 bar: warning below 170, the press **stops** below 140 (~50 s), then cnc-02 and robot-03 go **STARVED** |
+| cnc-02 | `bearing` | sustained | Vibration climbs: warning at 7 mm/s, trip at 11 mm/s |
+| cnc-02 | `tool_wear` | **cumulative** | Each hit adds 35 % tool wear. Scrap rate climbs above 60 % wear (warning at 5 %, critical at 10 %). The **3rd hit stops the mill** for a tool change, and robot-03 starves. |
+| robot-03 | `jam` | sustained | The robot stops at once |
+| robot-03 | `misgrip` | **cumulative** | Each hit drops a part and raises a warning. **3 misgrips within 2 minutes trip a safety stop.** |
+| any or `all` | `none` | | Clears faults and trips, changes the tool and resets misgrips |
+
+**Scenarios** chain faults for you. Run them from the control room, the terminal (`scenario <name>`) or `POST /api/scenario`:
+
+| Scenario | What it does |
+|---|---|
+| `heatwave` | Overheat on the press, bearing wear on the mill |
+| `leak-cascade` | Hydraulic leak: the press stops, then the line starves downstream |
+| `worn-tools` | Three tool-wear hits 8 s apart |
+| `butterfingers` | Three misgrips 6 s apart |
+| `meltdown` | Every sustained fault, plus chaos mode |
+| `all-clear` | Clears this line (chaos mode unchanged) |
+
+**Chaos mode** injects a random fault every 45–120 s and repairs that machine 2 minutes later. It runs **alongside** faults you inject by hand: manual faults are never cleared by chaos, and chaos-hit machines are marked ⚡ in the control room. Turn it on with the **Auto Chaos Mode** input, or at runtime from the control room, the terminal (`chaos on|off`), the Node-RED buttons or MQTT (`on`/`off` to `factory/<site>/<line>/chaos`).
+
+### Running the demo
+
+1. Open **Grafana** (`grafana_dashboard_url`, anonymous view by default). The **How to run this demo** panel at the top has every link and topic for this deployment.
+2. Open the **control room** (`control_room_url`) and log in with the stack credentials. You get:
+   - live machine cards with fault buttons for every line, including joined factories
+   - scenario buttons and the chaos toggle
+   - a **terminal**: type `help`, or click a pre-canned command (`inject press-01 hydraulic_leak`, `scenario worn-tools`, `chaos on`, `status`, `lines`…)
+   - a **live MQTT feed** of `factory/#`, filterable to alerts, commands or telemetry
+3. Or use plain MQTT: open **MQTTX Web** (`mqttx_web_url`) and create a connection to `mqtt_websocket_url` (`ws://<host>:9001/mqtt`) with the stack login. Subscribe to `factory/#`, and publish `{"fault":"overheat"}` to `factory/<site>/<line>/press-01/cmd`. From a terminal, the same works with `mosquitto_pub -h <host> -u <user> -P <password> -t … -m …` on port 1883.
+4. Or use REST (basic auth): `curl -u <user>:<password> -H 'Content-Type: application/json' -d '{"machine":"press-01","fault":"overheat"}' http://<host>:1880/api/fault`. Other endpoints are `GET /api/status`, `POST /api/chaos {"enabled":true}`, `POST /api/scenario {"name":"leak-cascade"}`, `POST /api/console {"command":"help"}` and `GET /api/feed`.
+
+Alerts are published to `factory/<site>/<line>/alerts`, stored in InfluxDB, listed in Grafana's **Recent alerts** table and drawn as red annotations on every chart.
 
 ![IoT Smart Factory dashboard with three injected faults](docs/images/iot_factory_dashboard.png)
 
-**The line:** `press-01` (hydraulic press), `cnc-02` (CNC mill) and `robot-03` (packing robot) publish temperature, vibration, rpm, power, parts produced, state and a health score every few seconds to `factory/<site>/<line>/<machine>/telemetry`.
+**Grafana rows:**
+- **How to run this demo**
+- **Line status**: state, health, parts and alerts
+- **Fault build-up**: hydraulic pressure, tool wear and scrap, misgrips
+- **Trends**
+- **Factory network**: every machine on every joined line
+- **Data pipeline health**: seconds since last data, ingest rate, InfluxDB write counts, broker clients and load, points stored
 
-**Running the demo:**
+The **Site** and **Line** selectors filter every panel when factories are joined.
 
-1. Open the `grafana_dashboard_url` capability (kiosk mode, anonymous view by default). All machines are green and RUNNING.
-2. Inject a fault, in any of these ways:
-   - Click a button on the **Fault Injection** tab in the Node-RED editor (`nodered_editor_url`).
-   - Call the REST API: `curl -u <user>:<password> -H 'Content-Type: application/json' -d '{"machine":"press-01","fault":"overheat"}' http://<host>:1880/api/fault`
-   - Publish over MQTT from a laptop: `mosquitto_pub -h <host> -u <user> -P <password> -t factory/<site>/<line>/cnc-02/cmd -m '{"fault":"bearing"}'`
-3. Watch the dashboard react:
+**InfluxDB** (`influxdb_url`, stack login) has its own **IoT Factory – Database Health** dashboard (Dashboards menu), showing readings and alerts stored, lines reporting, failed writes, ingest rate and broker load. Raw data is in **Data Explorer**, bucket `telemetry`.
 
-   | Fault | Machine | What happens |
-   |---|---|---|
-   | `overheat` | press-01 | Temperature ramps. WARNING at 85 °C (~20 s), CRITICAL at 95 °C (~40 s), then the press trips to FAULT and production stops |
-   | `bearing` | cnc-02 | Vibration climbs past 7 then 11 mm/s, health drops, the mill trips |
-   | `jam` | robot-03 | The robot STOPS at once, its parts counter freezes and power drops |
-   | `none` | any or `all` | Clears the fault. Machines restart and cool down, and "back to normal" events are logged |
+### Joining factories
 
-   Alerts are published to `factory/<site>/<line>/alerts`, stored in InfluxDB, listed in the **Recent alerts** table and drawn as red annotations on every chart. `GET /api/status` returns the live line state and active alerts as JSON.
-4. Set **Auto Chaos Mode** for an unattended booth: a random fault every 2–4 minutes, cleared after 2.
+Deploy the blueprint again on a second Ubuntu 24.04 host with a **different Factory Site or Production Line**, set **Join A Hub Factory** to true, and enter the first deployment's ID as **Hub Deployment ID**. The `join_hub` node reads the hub's `mqtt_host`, `mqtt_port`, `mqtt_topic_root` and `stack_admin_credentials` capabilities. It then adds a Mosquitto bridge on the joining factory:
+
+- `factory/<site>/<line>/+/telemetry` flows **out** to the hub. The hub's rules engine raises alerts for the new line, its InfluxDB stores it, and its Grafana (Site/Line selectors, Factory network table) and control room show it.
+- `factory/<site>/<line>/+/cmd` and `…/chaos` flow **in** from the hub. The hub's control room, terminal (`inject cnc-02 tool_wear worcester/line-2`) and MQTT clients can inject faults into the joined line.
+
+Each factory still runs its own stack and dashboards. The hub is the place that sees and controls them all. Any number of factories can join one hub. Uninstalling a joined factory removes its bridge first.
 
 ### Secrets
 
 | Input | Secret type | Required | Purpose |
 |---|---|---|---|
 | `ssh_private_key` | SSH private key | Yes | Private key matching an `authorized_keys` entry on the remote host |
-| `stack_admin_credentials` | Basic Auth Credentials | Yes | One login for the Node-RED editor and API, Grafana admin, InfluxDB admin and the external MQTT user. The password must be at least 8 characters, and the username must not contain `:` |
+| `stack_admin_credentials` | Basic Auth Credentials | Yes | One login for the Node-RED editor, control room and API, Grafana admin, InfluxDB admin and the MQTT users. The password must be at least 8 characters, and the username must not contain `:` |
 
-The credentials never appear in compose files or environment variables. They are written to `/opt/iot-factory/secrets` (a root-only directory) and mounted as compose secrets. Node-RED and Mosquitto store only hashes (bcrypt / PBKDF2).
+The credentials never appear in compose files or environment variables. They are written to `/opt/iot-factory/secrets` (a root-only directory) and mounted as compose secrets. Node-RED and Mosquitto store only hashes (bcrypt / PBKDF2). A joining factory reads the hub's credentials secret by name from the hub's capabilities, and writes them into its bridge config (mode 0600).
 
 ### Inputs
 
@@ -721,49 +783,66 @@ The credentials never appear in compose files or environment variables. They are
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
 | `stack_admin_credentials` | Stack Admin Credentials Secret | secret_key | – | ✗ | Schema `basic_auth_credentials` |
-| `factory_site` | Factory Site | string | `hopkinton` | ✗ | Lowercase letters, digits, hyphens. Used in topics, tags and the dashboard title |
+| `factory_site` | Factory Site | string | `hopkinton` | ✗ | Lowercase letters, digits, hyphens. Used in topics, tags and the dashboard title. |
 | `factory_line` | Production Line | string | `line-1` | ✗ | As above |
 | `publish_interval` | Telemetry Interval | integer | `2` | ✗ | Seconds, 1–60 |
-| `auto_chaos` | Auto Chaos Mode | boolean | `false` | ✗ | Random faults for unattended demos |
+| `auto_chaos` | Auto Chaos Mode | boolean | `false` | ✗ | Chaos mode at start-up; can be toggled at runtime |
 | `grafana_anonymous_viewer` | Grafana Anonymous Viewer | boolean | `true` | ✗ | Read-only dashboards without a login (kiosk screens) |
 
-**Service Ports**: `mqtt_port` (`1883`), `nodered_port` (`1880`), `grafana_port` (`3000`), `influxdb_port` (`8086`), 1024–65535.
+**Service Ports**: `mqtt_port` (`1883`), `nodered_port` (`1880`), `grafana_port` (`3000`), `influxdb_port` (`8086`), `mqtt_ws_port` (`9001`), `mqttx_web_port` (`8080`), each 1024–65535.
+
+**Join Another Factory**
+
+| Input | Label | Type | Default | Upd | Notes |
+|---|---|---|---|---|---|
+| `join_hub` | Join A Hub Factory | boolean | `false` | ✗ | Adds the `join_hub` node |
+| `hub_deployment_id` | Hub Deployment ID | string | `""` | ✗ | Shown when `join_hub` is set. The ID of a running iot_factory deployment. |
 
 **Ansible Settings**
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✓ | 0–3. Raise only to troubleshoot |
+| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✓ | 0–3. Raise only to troubleshoot. |
 | `ansible_timeout` | Ansible Timeout | integer | `30` | ✓ | SSH connection timeout, 10–600 s |
-| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✓ | One line per task in the deployment log. Failures are always logged |
+| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✓ | One line per task in the deployment log. Failures are always logged. |
 
 ### Node template step-through
 
-Defined in `iot_factory/definitions.yaml`. All four are `dell.nodes.ansible.Executor` nodes connecting over direct SSH (`proxy_settings: disable: true`), chained with `depends_on`:
+Defined in `iot_factory/definitions.yaml`. All are `dell.nodes.ansible.Executor` nodes connecting over direct SSH (`proxy_settings: disable: true`), chained with `depends_on`:
 
-1. **`preflight`** (`preflight.yaml`): read-only. It reads `/etc/os-release` with `raw` (no Python or facts needed) and rejects anything but Ubuntu 24.04. It then checks the architecture (x86_64/aarch64), RAM (≥ 2 GB), free disk (≥ 10 GB), that the four service ports are free, and outbound HTTPS to `download.docker.com` and Docker Hub.
+1. **`preflight`** (`preflight.yaml`): read-only. It reads `/etc/os-release` with `raw` (no Python or facts needed) and rejects anything but Ubuntu 24.04. It then checks the architecture (x86_64/aarch64), RAM (≥ 2 GB), free disk (≥ 10 GB), that the six service ports are free, and outbound HTTPS to `download.docker.com` and Docker Hub. `number_of_attempts: 1`: a failed check is final.
 2. **`install_docker`** (`install_docker.yaml`): Docker CE and the compose plugin from Docker's apt repository. An existing Docker engine is left alone. A marker in `/etc/iot-factory` records whether this blueprint installed Docker. **Uninstall** (`stop` → `teardown_docker.yaml`) purges Docker, its repo, key and data **only if** the marker exists.
-3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run and hashes passwords on the host. Re-runs are idempotent: nothing changes or restarts unless an input or file did. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
-4. **`verify_demo`** (`verify_demo.yaml`): proves the demo works through the same paths a presenter uses. It checks that telemetry arrives on MQTT, that anonymous MQTT and unauthenticated API calls are refused, and that a jam injected through `/api/fault` raises an alert, which it then clears. It also checks that telemetry and alerts are in InfluxDB and that the dashboard is provisioned.
+3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run, hashes passwords on the host, and applies the InfluxDB dashboard as an `influx` stack. Re-runs are idempotent: nothing changes or restarts unless an input or file did. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
+4. **`verify_demo`** (`verify_demo.yaml`): proves the demo works. It checks that telemetry arrives on MQTT, anonymous MQTT and unauthenticated API calls are refused, and the control room, MQTTX Web and websocket listener are up. It checks that a jam injected through `/api/fault` raises an alert, which it then clears, that telemetry and alerts are in InfluxDB, and that the Grafana dashboard is provisioned.
+5. **`join_hub`** (`join_hub.yaml`, only when `join_hub` is true): writes the Mosquitto bridge and restarts the broker. It waits for the bridge to connect, then confirms from this host that the hub's broker receives this line's telemetry. **Uninstall** (`stop` → `leave_hub.yaml`) removes the bridge.
 
-**Logging:** each playbook prints one line per task and ends with a single `IOT-FACTORY [<node>] OK: …` summary. On failure, it ends with a single `IOT-FACTORY [<node>] FAILED at '<task>': <reason>. Hint: …` line; search the deployment log for `IOT-FACTORY` to find it. The workflow's own error message is the plugin's generic "Number of attempts" text. Two ansible-plugin behaviours shape this:
+**Logging:** each playbook prints one line per task and ends with a single `IOT-FACTORY [<node>] OK: …` summary. On failure, it ends with a single `IOT-FACTORY [<node>] FAILED at '<task>': <reason> | <last stderr lines>. Hint: …` line. Search the deployment log for `IOT-FACTORY` to find it; the workflow's own error is the plugin's generic "Number of attempts" text. Two ansible-plugin behaviours shape this:
 
 - The plugin always runs `ansible-playbook -v`, so Ansible's default output would dump every task result into the log (over 1,000 log lines for an install). `playbooks/callback_plugins/iot_factory.py` is the default callback rendered one verbosity level lower: `ansible_debug_level` 0–1 gives one line per task, and 2–3 add detail.
 - The plugin adds the full playbook output to a failed operation's error, and with the `json` callback it also reports every task as an error. YAML-formatted default output avoids that.
 
-The plugin also retries failed playbooks (exit code 2), not only unreachable hosts. `preflight` sets `number_of_attempts: 1` so that a failed check is final, and the other nodes allow one retry. Tasks that handle secrets are `no_log`.
+The plugin also retries failed playbooks (exit code 2), not only unreachable hosts. `preflight` sets `number_of_attempts: 1`, and the other nodes allow one retry. Tasks that handle secrets are `no_log`.
 
-**Uninstall** returns the host to its pre-install state: stack, volumes, images and, if this blueprint installed it, Docker. `ca-certificates`, `curl` and `python3-debian` stay installed.
+**Playbook downloads:** before each node's first operation, the ansible plugin downloads the **whole blueprint archive**, file by file, into a per-node temporary directory (about 0.5 s per file). It reuses that copy for the same node's later operations (uninstall), but not across nodes. Upload this entry with only its own files (`iot_factory_remote_host_example.yaml`, `iot_factory/`, `CHANGELOG.md`) rather than the whole repository. That keeps each node's download to about 10 s instead of 30 s or more. Sharing one download across nodes is possible: set `playbook_source_path` to `{ get_attribute: [preflight, _blueprint_dir] }`. It was not adopted, because:
+
+- that directory lives in the mgmtworker's `/tmp`, so a pod restart between install and uninstall would break the teardown,
+- every node then logs an error-level "hosts already exists" line.
+
+**Uninstall** returns the host to its pre-install state: bridge, stack, volumes, images and, if this blueprint installed it, Docker. `ca-certificates`, `curl` and `python3-debian` stay installed.
 
 ### Capabilities
 
 | Capability | Value |
 |---|---|
 | `grafana_dashboard_url` | `http://<remote_host>:<grafana_port>/d/iot-factory/iot-smart-factory?kiosk&refresh=5s` |
+| `control_room_url` | `http://<remote_host>:<nodered_port>/control` |
+| `mqttx_web_url` | `http://<remote_host>:<mqttx_web_port>` |
+| `mqtt_websocket_url` | `ws://<remote_host>:<mqtt_ws_port>/mqtt` |
+| `mqtt_endpoint` | `tcp://<remote_host>:<mqtt_port>` |
+| `mqtt_host`, `mqtt_port` | Broker host and port (read by joining factories) |
+| `mqtt_topic_root` | `factory/<site>/<line>` |
 | `nodered_editor_url` | `http://<remote_host>:<nodered_port>/` |
 | `fault_injection_api` | `http://<remote_host>:<nodered_port>/api/fault` |
-| `mqtt_endpoint` | `tcp://<remote_host>:<mqtt_port>` |
-| `mqtt_topic_root` | `factory/<site>/<line>` |
 | `influxdb_url` | `http://<remote_host>:<influxdb_port>` |
 | `stack_admin_credentials` | Name of the stack credentials secret |
 

@@ -121,6 +121,6 @@
           ansible.builtin.fail:
             msg: >-
               IOT-FACTORY [install_docker] FAILED at '{{ ansible_failed_task.name }}':
-              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
               Hint: check that the host can reach download.docker.com and the Ubuntu
               apt mirrors, and that no other apt process holds the dpkg lock.

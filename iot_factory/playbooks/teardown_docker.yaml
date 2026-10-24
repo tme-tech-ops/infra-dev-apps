@@ -81,5 +81,5 @@
           ansible.builtin.fail:
             msg: >-
               IOT-FACTORY [install_docker] UNINSTALL FAILED at '{{ ansible_failed_task.name }}':
-              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
               Hint: check for a held dpkg lock (another apt process) on the host.

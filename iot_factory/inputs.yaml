@@ -224,6 +224,76 @@ inputs:
       group: ports
       index: 23
 
+  mqtt_ws_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: MQTT Websocket Port
+    description: |
+      Host TCP port of the Mosquitto websocket listener used by browser MQTT
+      clients such as MQTTX Web (password protected).
+    default: 9001
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 24
+
+  mqttx_web_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: MQTTX Web Port
+    description: |
+      Host TCP port of MQTTX Web, a browser MQTT client for publishing
+      commands and watching topics.
+    default: 8080
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: ports
+      index: 25
+
+# Join another factory
+
+  join_hub:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Join A Hub Factory
+    description: |
+      Bridge this factory's line into another IoT Smart Factory deployment
+      (the hub). The hub's Grafana, alerts and control room then show and
+      control this line too. Use a different Factory Site or Production Line
+      than the hub.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: join
+      index: 40
+
+  hub_deployment_id:
+    type: string
+    hidden: false
+    required: false
+    only_with: join_hub
+    allow_update: false
+    display_label: Hub Deployment ID
+    description: |
+      Deployment ID of the hub IoT Smart Factory deployment. Its MQTT host,
+      port and credentials secret are read from its capabilities.
+    default: ""
+    constraints:
+      - pattern: ^$|^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$
+        error_message: Must be a deployment ID (letters, numbers, dots, underscores, hyphens).
+    display:
+      group: join
+      index: 41
+
 # Ansible
 
   ansible_debug_level:

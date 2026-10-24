@@ -110,5 +110,5 @@
           ansible.builtin.fail:
             msg: >-
               IOT-FACTORY [preflight] FAILED at '{{ ansible_failed_task.name }}':
-              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
               No changes were made to the host.

@@ -5,9 +5,17 @@ log_dest stdout
 log_type error
 log_type warning
 log_type notice
+connection_messages false
 
-# External listener (published on host port {{ mqtt_port }}): login required.
+# External MQTT listener (host port {{ mqtt_port }}): login required.
 listener 1883
+allow_anonymous false
+password_file /mosquitto/config/passwd
+
+# MQTT over websockets (host port {{ mqtt_ws_port }}) for browser clients such
+# as MQTTX Web: login required.
+listener 9001
+protocol websockets
 allow_anonymous false
 password_file /mosquitto/config/passwd
 
@@ -15,3 +23,6 @@ password_file /mosquitto/config/passwd
 # checks). Not published on the host.
 listener 1884
 allow_anonymous true
+
+# Bridges to other factories (join_hub node) are dropped in here.
+include_dir /mosquitto/config/conf.d

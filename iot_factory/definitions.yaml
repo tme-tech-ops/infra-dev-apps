@@ -55,6 +55,9 @@ dsl_definitions:
     nodered_port: { get_input: nodered_port }
     grafana_port: { get_input: grafana_port }
     influxdb_port: { get_input: influxdb_port }
+    mqtt_ws_port: { get_input: mqtt_ws_port }
+    mqttx_web_port: { get_input: mqttx_web_port }
+    public_host: { get_input: remote_host }
     admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
     admin_password: { get_secret: [{ get_input: stack_admin_credentials }, password] }
 
@@ -75,6 +78,8 @@ node_templates:
           - { get_input: nodered_port }
           - { get_input: grafana_port }
           - { get_input: influxdb_port }
+          - { get_input: mqtt_ws_port }
+          - { get_input: mqttx_web_port }
 
   # Docker CE from the official apt repository. Uninstall removes Docker only
   # if this blueprint installed it.
@@ -130,3 +135,46 @@ node_templates:
     relationships:
       - type: dell.relationships.depends_on
         target: deploy_stack
+
+  # Optional: bridge this factory's line into a hub factory (another deployment
+  # of this blueprint). Instantiated only when join_hub is true, so the hub
+  # capabilities and secret are never looked up for a standalone factory.
+  join_hub:
+    type: dell.nodes.ansible.Executor
+    capabilities:
+      scalable:
+        properties:
+          default_instances:
+            jmespath:
+              - 'length([?join_hub == `true`]) || `0`'
+              - [{"join_hub": { get_input: join_hub }}]
+    properties: &join_hub_properties
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/join_hub.yaml
+      run_data:
+        factory_site: { get_input: factory_site }
+        factory_line: { get_input: factory_line }
+        hub_host: { get_capability: [{ get_input: hub_deployment_id }, mqtt_host] }
+        hub_port: { get_capability: [{ get_input: hub_deployment_id }, mqtt_port] }
+        hub_topic_root: { get_capability: [{ get_input: hub_deployment_id }, mqtt_topic_root] }
+        hub_username:
+          get_secret:
+            - { get_capability: [{ get_input: hub_deployment_id }, stack_admin_credentials] }
+            - username
+        hub_password:
+          get_secret:
+            - { get_capability: [{ get_input: hub_deployment_id }, stack_admin_credentials] }
+            - password
+      sensitive_keys:
+        - ansible_password
+        - hub_password
+    interfaces:
+      dell.interfaces.lifecycle:
+        stop:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *join_hub_properties
+            playbook_path: iot_factory/playbooks/leave_hub.yaml
+    relationships:
+      - type: dell.relationships.depends_on
+        target: verify_demo

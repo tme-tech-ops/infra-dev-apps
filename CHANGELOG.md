@@ -15,6 +15,14 @@ affected.
   Grafana dashboard. A preflight node refuses other OSes before changing
   anything. Uninstall reverts the host, including Docker when the blueprint
   installed it. Tested on Ubuntu 24.04 only.
+- Added (iot_factory): second fault per machine with build-up behaviour
+  (`hydraulic_leak`, cumulative `tool_wear` and `misgrip`), line cascades
+  (STARVED), runtime chaos mode that runs alongside manual faults, scenarios,
+  a Node-RED control room (`/control`: live line cards, fault buttons,
+  terminal, live MQTT feed), MQTTX Web with a Mosquitto websocket listener,
+  multi-factory joining over a Mosquitto bridge (`join_hub`), a reworked
+  Grafana dashboard (how-to, fault build-up, factory network, data pipeline
+  health, site/line selectors) and an InfluxDB Database Health dashboard.
 - Changed: DDPC rebrand. The collection now targets Dell Distributed Private
   Cloud (DDPC), orchestrated by the Dell Automation Platform (DAP). Entry
   files are renamed (`git mv`, history kept):

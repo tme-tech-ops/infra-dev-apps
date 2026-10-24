@@ -1,711 +1,1689 @@
 {
-  "uid": "iot-factory",
-  "title": "IoT Smart Factory - __FACTORY_SITE__ / __FACTORY_LINE__",
-  "description": "Site __FACTORY_SITE__, line __FACTORY_LINE__. Deployed by the infra-dev-apps DAP blueprint.",
-  "tags": [
-    "iot",
-    "factory",
-    "dap"
-  ],
-  "timezone": "browser",
-  "editable": false,
-  "graphTooltip": 1,
-  "refresh": "5s",
-  "time": {
-    "from": "now-15m",
-    "to": "now"
-  },
-  "timepicker": {
-    "refresh_intervals": [
-      "5s",
-      "10s",
-      "30s",
-      "1m"
-    ]
-  },
-  "schemaVersion": 39,
-  "version": 1,
-  "links": [],
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      },
-      {
-        "datasource": {
-          "type": "influxdb",
-          "uid": "influxdb-iot"
-        },
-        "enable": true,
-        "iconColor": "red",
-        "name": "Critical alerts",
-        "target": {
-          "refId": "Anno",
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"message\" and r.severity == \"critical\")\n  |> keep(columns: [\"_time\", \"_value\", \"machine\"])"
-        }
-      }
-    ]
-  },
-  "templating": {
-    "list": []
-  },
-  "panels": [
-    {
-      "type": "stat",
-      "title": "Machine state",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: -1m)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"state_code\")\n  |> group(columns: [\"machine\"])\n  |> last()\n  |> keep(columns: [\"machine\", \"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "RUNNING",
-                  "color": "green",
-                  "index": 0
-                },
-                "1": {
-                  "text": "DEGRADED",
-                  "color": "orange",
-                  "index": 1
-                },
-                "2": {
-                  "text": "STOPPED",
-                  "color": "purple",
-                  "index": 2
-                },
-                "3": {
-                  "text": "FAULT",
-                  "color": "red",
-                  "index": 3
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "displayName": "${__field.labels.machine}"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
-        "orientation": "vertical",
-        "wideLayout": true
-      },
-      "id": 1,
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 8,
-        "h": 7
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "gauge",
-      "title": "Machine health",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: -1m)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"health\")\n  |> group(columns: [\"machine\"])\n  |> last()\n  |> keep(columns: [\"machine\", \"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "min": 0,
-          "max": 100,
-          "unit": "percent",
-          "displayName": "${__field.labels.machine}",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 40
-              },
-              {
-                "color": "green",
-                "value": 75
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdMarkers": true,
-        "showThresholdLabels": false,
-        "orientation": "auto"
-      },
-      "id": 2,
-      "gridPos": {
-        "x": 8,
-        "y": 0,
-        "w": 8,
-        "h": 7
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Parts produced (time range)",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"parts_total\")\n  |> group(columns: [\"machine\"])\n  |> spread()\n  |> keep(columns: [\"machine\", \"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "displayName": "${__field.labels.machine}",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "center",
-        "orientation": "vertical"
-      },
-      "id": 3,
-      "gridPos": {
-        "x": 16,
-        "y": 0,
-        "w": 4,
-        "h": 7
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Alerts (time range)",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"active\" and r._value == 1)\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 0,
-          "noValue": "0",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "id": 4,
-      "gridPos": {
-        "x": 20,
-        "y": 0,
-        "w": 4,
-        "h": 7
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Temperature",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"temperature\")\n  |> group(columns: [\"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"machine\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius",
-          "displayName": "${__field.labels.machine}",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": true,
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 85
-              },
-              {
-                "color": "red",
-                "value": 95
-              }
-            ]
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 5,
-      "gridPos": {
-        "x": 0,
-        "y": 7,
-        "w": 12,
-        "h": 9
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Vibration",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"vibration\")\n  |> group(columns: [\"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"machine\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "suffix: mm/s",
-          "displayName": "${__field.labels.machine}",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": true,
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 7
-              },
-              {
-                "color": "red",
-                "value": 11
-              }
-            ]
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 6,
-      "gridPos": {
-        "x": 12,
-        "y": 7,
-        "w": 12,
-        "h": 9
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Power draw",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"power_kw\")\n  |> group(columns: [\"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"machine\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kwatt",
-          "displayName": "${__field.labels.machine}",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "spanNulls": true,
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 7,
-      "gridPos": {
-        "x": 0,
-        "y": 16,
-        "w": 8,
-        "h": 8
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Throughput (parts / min)",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"parts_total\")\n  |> group(columns: [\"machine\"])\n  |> aggregateWindow(every: 30s, fn: last, createEmpty: false)\n  |> derivative(unit: 1m, nonNegative: true)\n  |> keep(columns: [\"_time\", \"_value\", \"machine\"])"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 1,
-          "displayName": "${__field.labels.machine}",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 8,
-            "showPoints": "never",
-            "drawStyle": "line",
-            "lineInterpolation": "smooth"
-          },
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "id": 8,
-      "gridPos": {
-        "x": 8,
-        "y": 16,
-        "w": 8,
-        "h": 8
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    },
-    {
-      "type": "table",
-      "title": "Recent alerts",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "influxdb-iot"
-          },
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"message\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 25)\n  |> keep(columns: [\"_time\", \"severity\", \"machine\", \"_value\"])\n  |> rename(columns: {_time: \"Time\", severity: \"Severity\", machine: \"Machine\", _value: \"Message\"})"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "left",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Severity"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "critical": {
-                        "color": "red",
-                        "index": 0
-                      },
-                      "warning": {
-                        "color": "orange",
-                        "index": 1
-                      },
-                      "info": {
-                        "color": "green",
-                        "index": 2
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 90
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 170
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Machine"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 90
-              }
-            ]
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "indexByName": {
-              "Time": 0,
-              "Severity": 1,
-              "Machine": 2,
-              "Message": 3
-            }
-          }
-        }
-      ],
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
-        }
-      },
-      "id": 9,
-      "gridPos": {
-        "x": 16,
-        "y": 16,
-        "w": 8,
-        "h": 8
-      },
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb-iot"
-      }
-    }
+ "uid": "iot-factory",
+ "title": "IoT Smart Factory - __FACTORY_SITE__ / __FACTORY_LINE__",
+ "description": "Deployed by the infra-dev-apps DAP blueprint.",
+ "tags": [
+  "iot",
+  "factory",
+  "dap"
+ ],
+ "timezone": "browser",
+ "editable": false,
+ "graphTooltip": 1,
+ "refresh": "5s",
+ "time": {
+  "from": "now-15m",
+  "to": "now"
+ },
+ "timepicker": {
+  "refresh_intervals": [
+   "5s",
+   "10s",
+   "30s",
+   "1m"
   ]
+ },
+ "schemaVersion": 39,
+ "version": 2,
+ "links": [
+  {
+   "title": "Control room",
+   "type": "link",
+   "icon": "external link",
+   "targetBlank": true,
+   "url": "http://__PUBLIC_HOST__:__NODERED_PORT__/control"
+  },
+  {
+   "title": "MQTTX Web",
+   "type": "link",
+   "icon": "external link",
+   "targetBlank": true,
+   "url": "http://__PUBLIC_HOST__:__MQTTX_PORT__"
+  }
+ ],
+ "annotations": {
+  "list": [
+   {
+    "builtIn": 1,
+    "datasource": {
+     "type": "grafana",
+     "uid": "-- Grafana --"
+    },
+    "enable": true,
+    "hide": true,
+    "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts",
+    "type": "dashboard"
+   },
+   {
+    "datasource": {
+     "type": "influxdb",
+     "uid": "influxdb-iot"
+    },
+    "enable": true,
+    "iconColor": "red",
+    "name": "Critical alerts",
+    "target": {
+     "refId": "Anno",
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"message\" and r.severity == \"critical\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n  |> keep(columns: [\"_time\", \"_value\", \"machine\"])"
+    }
+   }
+  ]
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "site",
+    "label": "Site",
+    "type": "query",
+    "datasource": {
+     "type": "influxdb",
+     "uid": "influxdb-iot"
+    },
+    "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"site\", start: -30d)",
+    "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"site\", start: -30d)",
+    "multi": true,
+    "includeAll": true,
+    "refresh": 2,
+    "sort": 1,
+    "current": {
+     "selected": true,
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    }
+   },
+   {
+    "name": "line",
+    "label": "Line",
+    "type": "query",
+    "datasource": {
+     "type": "influxdb",
+     "uid": "influxdb-iot"
+    },
+    "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"line\", predicate: (r) => contains(value: r.site, set: ${site:json}), start: -30d)",
+    "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"line\", predicate: (r) => contains(value: r.site, set: ${site:json}), start: -30d)",
+    "multi": true,
+    "includeAll": true,
+    "refresh": 2,
+    "sort": 1,
+    "current": {
+     "selected": true,
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    }
+   }
+  ]
+ },
+ "panels": [
+  {
+   "type": "row",
+   "title": "How to run this demo",
+   "collapsed": false,
+   "panels": [],
+   "id": 1,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "text",
+   "title": "",
+   "options": {
+    "mode": "markdown",
+    "content": "**What you are looking at:** a simulated packaging line (press-01 &rarr; cnc-02 &rarr; robot-03) streaming telemetry over **MQTT** into **Node-RED**, which raises alerts and stores everything in **InfluxDB**. Every panel here is an InfluxDB query.\nInject a fault and watch the machine's signal climb, its health drop, alerts appear and, when a machine stops, the machines after it go **STARVED**.\n\n| Inject faults from | |\n|---|---|\n| **Control room** (buttons, scenarios, terminal, live MQTT feed) | [http://__PUBLIC_HOST__:__NODERED_PORT__/control](http://__PUBLIC_HOST__:__NODERED_PORT__/control) |\n| **MQTTX Web** (any MQTT client) | [http://__PUBLIC_HOST__:__MQTTX_PORT__](http://__PUBLIC_HOST__:__MQTTX_PORT__) &rarr; connect `ws://__PUBLIC_HOST__:__MQTT_WS_PORT__/mqtt`, publish `{\"fault\":\"overheat\"}` to `factory/__FACTORY_SITE__/__FACTORY_LINE__/press-01/cmd` |\n| **Node-RED editor** (Fault Injection tab) | [http://__PUBLIC_HOST__:__NODERED_PORT__](http://__PUBLIC_HOST__:__NODERED_PORT__) |\n\nFaults: press-01 `overheat`, `hydraulic_leak` &middot; cnc-02 `bearing`, `tool_wear` (3 hits stop it) &middot; robot-03 `jam`, `misgrip` (3 in 2 min trip it) &middot; `none` clears. Chaos mode: `on`/`off` to `factory/__FACTORY_SITE__/__FACTORY_LINE__/chaos`. All logins use the stack admin credentials."
+   },
+   "datasource": {
+    "type": "grafana",
+    "uid": "grafana"
+   },
+   "id": 2,
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 24,
+    "h": 7
+   }
+  },
+  {
+   "type": "row",
+   "title": "Line status",
+   "collapsed": false,
+   "panels": [],
+   "id": 3,
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Machine state",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -2m)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"state_code\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> last()\n  |> keep(columns: [\"site\", \"line\", \"machine\", \"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "RUNNING",
+         "color": "green",
+         "index": 0
+        },
+        "1": {
+         "text": "DEGRADED",
+         "color": "orange",
+         "index": 1
+        },
+        "2": {
+         "text": "STOPPED",
+         "color": "purple",
+         "index": 2
+        },
+        "3": {
+         "text": "FAULT",
+         "color": "red",
+         "index": 3
+        },
+        "4": {
+         "text": "STARVED",
+         "color": "blue",
+         "index": 4
+        }
+       }
+      }
+     ],
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "displayName": "${__field.labels.line} ${__field.labels.machine}"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "orientation": "vertical"
+   },
+   "id": 4,
+   "gridPos": {
+    "x": 0,
+    "y": 9,
+    "w": 8,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "gauge",
+   "title": "Machine health",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -2m)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"health\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> last()\n  |> keep(columns: [\"site\", \"line\", \"machine\", \"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "min": 0,
+     "max": 100,
+     "unit": "percent",
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 40
+       },
+       {
+        "color": "green",
+        "value": 75
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showThresholdMarkers": true,
+    "showThresholdLabels": false,
+    "orientation": "auto"
+   },
+   "id": 5,
+   "gridPos": {
+    "x": 8,
+    "y": 9,
+    "w": 8,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Parts produced (time range)",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"parts_total\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> spread()\n  |> keep(columns: [\"site\", \"line\", \"machine\", \"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": ".*clients_connected.*"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Clients"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": ".*load_received_1min.*"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Msgs / min"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "value",
+    "textMode": "value_and_name",
+    "orientation": "vertical"
+   },
+   "id": 6,
+   "gridPos": {
+    "x": 16,
+    "y": 9,
+    "w": 4,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Alerts (time range)",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"active\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> filter(fn: (r) => r._value == 1)\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "noValue": "0",
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 5
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "background",
+    "textMode": "value"
+   },
+   "id": 7,
+   "gridPos": {
+    "x": 20,
+    "y": 9,
+    "w": 4,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Fault build-up",
+   "collapsed": false,
+   "panels": [],
+   "id": 8,
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Hydraulic pressure (press)",
+   "description": "hydraulic_leak bleeds pressure: warning below 170 bar, the press stops below 140 bar.",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"pressure_bar\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: bar",
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 140
+       },
+       {
+        "color": "green",
+        "value": 170
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 9,
+   "gridPos": {
+    "x": 0,
+    "y": 17,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Tool wear and scrap (cnc)",
+   "description": "Each tool_wear hit adds 35%. Scrap climbs above 60% wear; at 100% the mill stops for a tool change.",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"tool_wear_pct\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"scrap_rate_pct\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 60
+       },
+       {
+        "color": "red",
+        "value": 100
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byFrameRefID",
+       "options": "A"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "${__field.labels.line} tool wear"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byFrameRefID",
+       "options": "B"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "${__field.labels.line} scrap rate"
+       },
+       {
+        "id": "custom.axisPlacement",
+        "value": "right"
+       },
+       {
+        "id": "custom.thresholdsStyle",
+        "value": {
+         "mode": "off"
+        }
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 10,
+   "gridPos": {
+    "x": 8,
+    "y": 17,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Misgrips in last 2 min (robot)",
+   "description": "Each misgrip drops a part. Three within 2 minutes trip a safety stop.",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"misgrips_2m\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 3
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "decimals": 0,
+     "min": 0,
+     "max": 3
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 11,
+   "gridPos": {
+    "x": 16,
+    "y": 17,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Trends",
+   "collapsed": false,
+   "panels": [],
+   "id": 12,
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Temperature",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"temperature\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "celsius",
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 85
+       },
+       {
+        "color": "red",
+        "value": 95
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 13,
+   "gridPos": {
+    "x": 0,
+    "y": 26,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Vibration",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"vibration\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "suffix: mm/s",
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 7
+       },
+       {
+        "color": "red",
+        "value": 11
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 14,
+   "gridPos": {
+    "x": 12,
+    "y": 26,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Power draw",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"power_kw\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatt",
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 15,
+   "gridPos": {
+    "x": 0,
+    "y": 34,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Throughput (parts / min)",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"parts_total\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\", \"machine\"])\n  |> aggregateWindow(every: 30s, fn: last, createEmpty: false)\n  |> derivative(unit: 1m, nonNegative: true)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 1,
+     "displayName": "${__field.labels.line} ${__field.labels.machine}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "lineInterpolation": "smooth"
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 16,
+   "gridPos": {
+    "x": 8,
+    "y": 34,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Recent alerts",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"message\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 30)\n  |> keep(columns: [\"_time\", \"severity\", \"line\", \"machine\", \"_value\"])\n  |> rename(columns: {_time: \"Time\", severity: \"Severity\", line: \"Line\", machine: \"Machine\", _value: \"Message\"})"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "indexByName": {
+       "Time": 0,
+       "Severity": 1,
+       "Line": 2,
+       "Machine": 3,
+       "Message": 4
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "left",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Severity"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "critical": {
+            "color": "red",
+            "index": 0
+           },
+           "warning": {
+            "color": "orange",
+            "index": 1
+           },
+           "info": {
+            "color": "blue",
+            "index": 2
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-background"
+        }
+       },
+       {
+        "id": "custom.width",
+        "value": 80
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Time"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 160
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Line"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 70
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Machine"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 80
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 17,
+   "gridPos": {
+    "x": 16,
+    "y": 34,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Factory network (this factory and joined factories)",
+   "collapsed": false,
+   "panels": [],
+   "id": 18,
+   "gridPos": {
+    "x": 0,
+    "y": 42,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "table",
+   "title": "All machines",
+   "description": "Latest reading of every machine on every line sent to this broker. Joined factories bridge their telemetry here.",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -2m)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\")\n  |> filter(fn: (r) => r._field == \"state\" or r._field == \"health\" or r._field == \"reason\" or r._field == \"faults\" or r._field == \"parts_total\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n  |> last()\n  |> pivot(rowKey: [\"site\", \"line\", \"machine\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> keep(columns: [\"site\", \"line\", \"machine\", \"state\", \"health\", \"faults\", \"reason\", \"parts_total\"])\n  |> sort(columns: [\"site\", \"line\", \"machine\"])"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "indexByName": {
+       "site": 0,
+       "line": 1,
+       "machine": 2,
+       "state": 3,
+       "health": 4,
+       "faults": 5,
+       "reason": 6,
+       "parts_total": 7
+      },
+      "renameByName": {
+       "site": "Site",
+       "line": "Line",
+       "machine": "Machine",
+       "state": "State",
+       "health": "Health",
+       "faults": "Active faults",
+       "reason": "Reason",
+       "parts_total": "Parts"
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "left",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "State"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "RUNNING": {
+            "color": "green",
+            "index": 0
+           },
+           "DEGRADED": {
+            "color": "orange",
+            "index": 1
+           },
+           "STOPPED": {
+            "color": "purple",
+            "index": 2
+           },
+           "FAULT": {
+            "color": "red",
+            "index": 3
+           },
+           "STARVED": {
+            "color": "blue",
+            "index": 4
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-background"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Health"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       },
+       {
+        "id": "min",
+        "value": 0
+       },
+       {
+        "id": "max",
+        "value": 100
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "red",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 40
+          },
+          {
+           "color": "green",
+           "value": 75
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "gauge",
+         "mode": "basic"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 19,
+   "gridPos": {
+    "x": 0,
+    "y": 43,
+    "w": 24,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Data pipeline health (MQTT -> Node-RED -> InfluxDB)",
+   "collapsed": false,
+   "panels": [],
+   "id": 20,
+   "gridPos": {
+    "x": 0,
+    "y": 50,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Seconds since last data",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"health\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n  |> group(columns: [\"site\", \"line\"])\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: int(v: now()) - int(v: r._time)) / 1000000000.0}))\n  |> keep(columns: [\"site\", \"line\", \"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": 0,
+     "displayName": "${__field.labels.site}/${__field.labels.line}",
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 15
+       },
+       {
+        "color": "red",
+        "value": 60
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "background",
+    "textMode": "value_and_name",
+    "orientation": "vertical"
+   },
+   "id": 21,
+   "gridPos": {
+    "x": 0,
+    "y": 51,
+    "w": 4,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Ingest rate (telemetry messages / min)",
+   "description": "",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" and r._field == \"health\")\n  |> filter(fn: (r) => contains(value: r.site, set: ${site:json}) and contains(value: r.line, set: ${line:json}))\n\n  |> group(columns: [\"site\", \"line\"])\n  |> aggregateWindow(every: 1m, fn: count, createEmpty: false)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "displayName": "${__field.labels.site}/${__field.labels.line}",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 8,
+      "showPoints": "never",
+      "spanNulls": true,
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 22,
+   "gridPos": {
+    "x": 4,
+    "y": 51,
+    "w": 8,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "InfluxDB writes (since Node-RED start)",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"pipeline\" and (r._field == \"influx_writes_ok\" or r._field == \"influx_writes_failed\"))\n  |> group(columns: [\"_field\"])\n  |> last()\n  |> keep(columns: [\"_field\", \"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": ".*influx_writes_ok.*"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Writes OK"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": ".*influx_writes_failed.*"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Failed"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "value",
+    "textMode": "value_and_name",
+    "orientation": "vertical"
+   },
+   "id": 23,
+   "gridPos": {
+    "x": 12,
+    "y": 51,
+    "w": 4,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "MQTT broker",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"broker\" and (r._field == \"clients_connected\" or r._field == \"load_received_1min\"))\n  |> group(columns: [\"_field\"])\n  |> last()\n  |> keep(columns: [\"_field\", \"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": ".*clients_connected.*"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Clients"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": ".*load_received_1min.*"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Msgs / min"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "value",
+    "textMode": "value_and_name",
+    "orientation": "vertical"
+   },
+   "id": 24,
+   "gridPos": {
+    "x": 16,
+    "y": 51,
+    "w": 4,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Points stored (24 h)",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influxdb-iot"
+     },
+     "query": "from(bucket: \"telemetry\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"machine_telemetry\" or r._measurement == \"alerts\")\n  |> group()\n  |> count()\n  |> keep(columns: [\"_value\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "graphMode": "none",
+    "justifyMode": "center",
+    "wideLayout": true,
+    "colorMode": "value",
+    "textMode": "value"
+   },
+   "id": 25,
+   "gridPos": {
+    "x": 20,
+    "y": 51,
+    "w": 4,
+    "h": 7
+   },
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influxdb-iot"
+   }
+  }
+ ]
 }

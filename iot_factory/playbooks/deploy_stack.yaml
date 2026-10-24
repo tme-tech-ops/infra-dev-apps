@@ -16,6 +16,7 @@
       nodered: nodered/node-red:4.1.1
       influxdb: influxdb:2.7.12
       grafana: grafana/grafana-oss:11.6.0
+      mqttx: emqx/mqttx-web:v1.13.0
 
   tasks:
     - name: Deploy the stack
@@ -48,6 +49,8 @@
             - { path: "" }
             - { path: secrets, mode: "0700" }
             - { path: mosquitto/config }
+            - { path: mosquitto/config/conf.d }
+            - { path: influxdb }
             - { path: nodered, owner: "1000" }
             - { path: grafana/provisioning/datasources }
             - { path: grafana/provisioning/dashboards }
@@ -193,6 +196,7 @@
           loop:
             - { src: flows.json, dest: nodered/flows.json, owner: "1000" }
             - { src: grafana-dashboards.yaml, dest: grafana/provisioning/dashboards/iot-factory.yaml }
+            - { src: influxdb-dashboard.yaml, dest: influxdb/dashboard.yaml }
           loop_control:
             label: "{{ item.dest }}"
           register: copied
@@ -203,7 +207,13 @@
             content: >-
               {{ lookup('ansible.builtin.file', 'files/iot-factory-dashboard.json')
                  | replace('__FACTORY_SITE__', factory_site)
-                 | replace('__FACTORY_LINE__', factory_line) }}
+                 | replace('__FACTORY_LINE__', factory_line)
+                 | replace('__PUBLIC_HOST__', public_host)
+                 | replace('__NODERED_PORT__', nodered_port | string)
+                 | replace('__MQTT_PORT__', mqtt_port | string)
+                 | replace('__MQTT_WS_PORT__', mqtt_ws_port | string)
+                 | replace('__MQTTX_PORT__', mqttx_web_port | string)
+                 | replace('__INFLUXDB_PORT__', influxdb_port | string) }}
             mode: "0644"
 
         - name: Start the stack (waits for all health checks)
@@ -233,6 +243,35 @@
             chdir: "{{ stack_dir }}"
           changed_when: false
 
+        - name: Find the InfluxDB dashboard stack
+          ansible.builtin.command:
+            cmd: docker compose exec -T influxdb influx stacks --stack-name iot-factory --json
+            chdir: "{{ stack_dir }}"
+          register: influx_stacks
+          changed_when: false
+
+        - name: Create the InfluxDB dashboard stack (first run only)
+          when: influx_stacks.stdout | from_json | length == 0
+          ansible.builtin.command:
+            cmd: docker compose exec -T influxdb influx stacks init --stack-name iot-factory --json
+            chdir: "{{ stack_dir }}"
+          register: influx_stack_new
+          changed_when: true
+
+        - name: Apply the InfluxDB "Database Health" dashboard
+          vars:
+            stack_id: >-
+              {{ (influx_stack_new.stdout | from_json).id if influx_stack_new is not skipped
+                 else (influx_stacks.stdout | from_json | first).id }}
+          # influx apply also reads stdin, which stays open under Ansible: close it.
+          ansible.builtin.command:
+            cmd: >-
+              docker compose exec -T influxdb sh -c
+              'influx apply --stack-id {{ stack_id }} --file /etc/iot-factory/dashboard.yaml --force yes --quiet < /dev/null'
+            chdir: "{{ stack_dir }}"
+          timeout: 120
+          changed_when: false
+
         - name: Record the deployed credentials fingerprint
           ansible.builtin.copy:
             dest: "{{ stack_dir }}/secrets/credentials.sha256"
@@ -243,9 +282,10 @@
         - name: Stack deployed
           ansible.builtin.debug:
             msg: >-
-              IOT-FACTORY [deploy_stack] OK: mosquitto, influxdb, node-red and grafana are
-              running and healthy in {{ stack_dir }} (MQTT :{{ mqtt_port }}, Node-RED :{{ nodered_port }},
-              Grafana :{{ grafana_port }}, InfluxDB :{{ influxdb_port }}).
+              IOT-FACTORY [deploy_stack] OK: mosquitto, influxdb, node-red, grafana and mqttx-web are
+              running and healthy in {{ stack_dir }}. Grafana http://{{ public_host }}:{{ grafana_port }},
+              control room http://{{ public_host }}:{{ nodered_port }}/control,
+              MQTTX Web http://{{ public_host }}:{{ mqttx_web_port }}.
 
       rescue:
         - name: Collect container status for the error message
@@ -261,7 +301,7 @@
             msg: >-
               IOT-FACTORY [deploy_stack] FAILED at '{{ ansible_failed_task.name }}':
               {{ '(details hidden: task handles secrets)' if ansible_failed_result.censored is defined
-                 else ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+                 else ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}
               Containers: {{ compose_ps.stdout_lines | default([]) | join(', ') | default('none', true) }}.
               Hint: image pulls need access to Docker Hub; for an unhealthy service run
               'docker compose -f {{ stack_dir }}/compose.yaml logs <service>' on the host.

@@ -8,6 +8,7 @@ services:
     restart: unless-stopped
     ports:
       - "{{ mqtt_port }}:1883"
+      - "{{ mqtt_ws_port }}:9001"
     volumes:
       - ./mosquitto/config:/mosquitto/config:ro
     healthcheck:
@@ -34,6 +35,7 @@ services:
     volumes:
       - influxdb-data:/var/lib/influxdb2
       - influxdb-config:/etc/influxdb2
+      - ./influxdb:/etc/iot-factory:ro
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 10s
@@ -53,6 +55,11 @@ services:
       AUTO_CHAOS: "{{ auto_chaos | bool | lower }}"
       INFLUX_ORG: {{ influx_org }}
       INFLUX_BUCKET: {{ influx_bucket }}
+      GRAFANA_URL: "http://{{ public_host }}:{{ grafana_port }}/d/iot-factory/iot-smart-factory"
+      MQTTX_URL: "http://{{ public_host }}:{{ mqttx_web_port }}"
+      INFLUXDB_URL: "http://{{ public_host }}:{{ influxdb_port }}"
+      MQTT_URL: "tcp://{{ public_host }}:{{ mqtt_port }}"
+      MQTT_WS_URL: "ws://{{ public_host }}:{{ mqtt_ws_port }}/mqtt"
     secrets: [influx_token]
     volumes:
       - ./nodered:/data
@@ -92,6 +99,19 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Browser MQTT client. The browser connects straight to Mosquitto's
+  # websocket listener (login required), so this container only serves the UI.
+  mqttx-web:
+    image: {{ images.mqttx }}
+    restart: unless-stopped
+    ports:
+      - "{{ mqttx_web_port }}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
       interval: 10s
       timeout: 5s
       retries: 12
