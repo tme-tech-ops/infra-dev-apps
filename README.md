@@ -680,6 +680,8 @@ The collection's showcase demo. Ansible connects to **any SSH-reachable Ubuntu 2
 | InfluxDB 2 | `influxdb:2.7.12` | 8086 | Telemetry and alerts (org `iot-factory`, bucket `telemetry`, 7-day retention) |
 | Grafana | `grafana/grafana-oss:11.6.0` | 3000 | Provisioned InfluxDB datasource and the **IoT Smart Factory** home dashboard |
 
+![IoT Smart Factory dashboard with three injected faults](docs/images/iot_factory_dashboard.png)
+
 **The line:** `press-01` (hydraulic press), `cnc-02` (CNC mill) and `robot-03` (packing robot) publish temperature, vibration, rpm, power, parts produced, state and a health score every few seconds to `factory/<site>/<line>/<machine>/telemetry`.
 
 **Running the demo:**
