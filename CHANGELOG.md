@@ -34,6 +34,12 @@ affected.
   Grafana dashboard. A preflight node refuses other OSes before changing
   anything. Uninstall reverts the host, including Docker when the blueprint
   installed it. Tested on Ubuntu 24.04 only.
+- Added: `iot_factory_example_for_DDPC.yaml` (`vm/` + `iot_factory/ddpc/`), the
+  IoT Smart Factory demo on a new Ubuntu 24.04 cloud-init VM on a DDPC
+  Endpoint. The same playbooks run through the Endpoint proxy (eo-proxy), so
+  the VM doesn't need to be reachable from the orchestrator. Uninstall removes
+  the VM. The remote-host inputs moved to `iot_factory/remote_host_inputs.yaml`
+  so both entries share `iot_factory/inputs.yaml`.
 - Added (iot_factory): second fault per machine with build-up behaviour
   (`hydraulic_leak`, cumulative `tool_wear` and `misgrip`), line cascades
   (STARVED), runtime chaos mode that runs alongside manual faults, scenarios,

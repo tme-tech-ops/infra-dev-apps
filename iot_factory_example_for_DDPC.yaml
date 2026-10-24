@@ -1,0 +1,134 @@
+tosca_definitions_version: dell_1_1
+
+description: >
+  This blueprint creates an Ubuntu 24.04 cloud-init Virtual Machine on a Dell
+  Distributed Private Cloud (DDPC) Endpoint and uses Ansible, through the
+  Endpoint proxy, to turn it into an IoT Smart Factory demo: Docker, a Mosquitto
+  MQTT broker, Node-RED (packaging-line simulator, fault injection and alert
+  rules), InfluxDB and a provisioned Grafana dashboard. The OS Image Secret must
+  point to an Ubuntu 24.04 cloud image.
+
+imports:
+  - dell/types/types.yaml
+  - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
+  - plugin:utilities-plugin?version= >=3.2.3.0,<4.0.0.0
+  - plugin:fabric-plugin?version= >=3.4.3.0,<4.0.0.0
+  - plugin:ansible-plugin?version= >=4.1.9.0,<5.0.0.0
+  - vm/definitions.yaml
+  - vm/inputs.yaml
+  - vm/outputs.yaml
+  - iot_factory/ddpc/definitions.yaml
+  - iot_factory/inputs.yaml
+  - iot_factory/ddpc/outputs.yaml
+
+input_groups:
+  artifact:
+    display_label: Deployment Artifacts
+    collapsible: false
+    index: 0
+    inputs:
+      - os_image_secret
+  vm:
+    display_label: DDPC Virtual Machine
+    collapsible: true
+    index: 1
+    inputs:
+      - vm_hostname
+      - vm_user_name
+      - vm_password
+      - vcpus
+      - memory_size
+      - os_disk_size
+      - disk_wrapper
+  device_passthrough:
+    display_label: Device Passthrough
+    collapsible: true
+    index: 2
+    inputs:
+      - use_passthrough
+      - pcie
+      - usb
+      - serial_port_wrapper
+      - gpu
+      - video
+  network:
+    display_label: Network Configuration
+    collapsible: true
+    index: 3
+    inputs:
+      - vnic_0_segment_name
+      - use_dhcp
+      - static_ip
+      - use_gateway
+      - gateway
+      - use_dns
+      - dns
+      - use_nat
+      - port_forward_rules
+      - add_second_nic
+      - vnic_1_segment_name
+      - use_dhcp2
+      - static_ip2
+      - use_dns2
+      - dns2
+      - use_nat2
+      - port_forward_rules2
+  factory:
+    display_label: Smart Factory Demo
+    collapsible: true
+    index: 4
+    inputs:
+      - stack_admin_credentials
+      - factory_site
+      - factory_line
+      - publish_interval
+      - auto_chaos
+      - grafana_anonymous_viewer
+  ports:
+    display_label: Service Ports
+    collapsible: true
+    index: 5
+    inputs:
+      - mqtt_port
+      - nodered_port
+      - grafana_port
+      - influxdb_port
+      - mqtt_ws_port
+      - mqttx_web_port
+  join:
+    display_label: Factory Network
+    collapsible: true
+    index: 6
+    inputs:
+      - accept_joins
+      - bridge_credentials
+      - bridge_port
+      - join_hub
+      - hub_deployment_id
+  ansible_settings:
+    display_label: Ansible Settings
+    collapsible: true
+    index: 7
+    inputs:
+      - ansible_debug_level
+      - ansible_timeout
+      - ansible_log_stdout
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  env:
+    values:
+      - ddpc
+  solution:
+    values:
+      - tme-tech-ops
+  version:
+    values:
+      - "4.0.0"
+
+blueprint_labels:
+  env:
+    values:
+      - ddpc

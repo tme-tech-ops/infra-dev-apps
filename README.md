@@ -49,6 +49,7 @@ Use it to:
 | [`compose_app_example_for_DDPC.yaml`](#7-compose_app) | **Any** user-supplied compose definition directly on the Endpoint, with an optional registry login and Day-2 updates | DDPC Endpoint | edge |
 | [`remote_host_example.yaml`](#8-remote_host) | NGINX with TLS and basic auth on any SSH-reachable Ubuntu host outside DDPC | none (any orchestrator) | fabric |
 | [`iot_factory_remote_host_example.yaml`](#9-iot_factory) | An interactive IoT Smart Factory demo (Mosquitto, Node-RED line simulator and control room, InfluxDB, Grafana, MQTTX Web) on a fresh **Ubuntu 24.04** host, installed end-to-end by Ansible over SSH. Factories can join each other. | none (any orchestrator) | ansible |
+| [`iot_factory_example_for_DDPC.yaml`](#iot_factory-on-a-ddpc-vm) | The same IoT Smart Factory demo on a new **Ubuntu 24.04** simple_vm VM, installed by Ansible through the Endpoint proxy | DDPC Endpoint | edge, utilities, fabric, ansible |
 
 ### Core features
 
@@ -61,7 +62,7 @@ Use it to:
 - **Containers directly on the Endpoint:** the edge-plugin `NativeEdgeCompose` node type, from a fixed compose file shipped in the blueprint (container_based, the Site IT Toolkit) or a validated user definition (compose_app). Both support an optional registry login with TLS verification.
 - **Layering:** nginx_app is deployed *on* a simple_vm deployment and reads its details with `get_environment_capability`.
 - **Day-2:** compose_app supports drift detection and deployment update (`check_drift` / `update` / `postupdate`).
-- **Beyond DDPC:** remote_host runs the same NGINX payload over plain SSH, with no proxy. iot_factory builds a full IoT demo on a fresh Ubuntu 24.04 host with Ansible over plain SSH.
+- **Beyond DDPC:** remote_host runs the same NGINX payload over plain SSH, with no proxy. iot_factory builds a full IoT demo on a fresh Ubuntu 24.04 host with Ansible over plain SSH, or on a new DDPC VM through the eo-proxy.
 - **DAP UI techniques:** input groups, conditional inputs (`only_with` / `exclusive_with`), constraints filled from inventory, hidden "advanced" inputs, and `dsl_definitions` anchors.
 
 ### Plugins
@@ -71,7 +72,7 @@ Use it to:
 | **edge-plugin** | `>=3.3.33.0,<4.0.0.0` | `NativeEdgeVM`, `BinaryImage`, `NativeEdgeCompose`, `RegistryLogin` node types | simple_vm, mqtt_nodered, container_based, compose_app |
 | **utilities-plugin** | `>=3.2.3.0,<4.0.0.0` | `dell.nodes.keys.RSAKey` (SSH key pair), `dell.nodes.CloudInit.CloudConfig` | simple_vm, mqtt_nodered |
 | **fabric-plugin** | `>=3.4.3.0,<4.0.0.0` | `run_script` / `run_commands` over SSH (through the eo-proxy, or direct) | simple_vm, mqtt_nodered, nginx_app, remote_host |
-| **ansible-plugin** | `>=4.1.9.0,<5.0.0.0` | `dell.nodes.ansible.Executor` (playbooks through the eo-proxy, or direct SSH) | mqtt_nodered, iot_factory |
+| **ansible-plugin** | `>=4.1.9.0,<5.0.0.0` | `dell.nodes.ansible.Executor` (playbooks through the eo-proxy, or direct SSH) | mqtt_nodered, iot_factory (both entries) |
 | Script plugin (built in) | none | Python operations run on the deployment agent (`central_deployment_agent`) | simple_vm, mqtt_nodered, nginx_app, container_based, compose_app |
 
 Plugins are imported in the entry files only (each `definitions.yaml` relies on them). The minimums are the versions DDPC 4.3.0.0 ships; older DDPC releases are not supported.
@@ -89,6 +90,7 @@ infra-dev-apps/
 ├── compose_app_example_for_DDPC.yaml      → compose_app/
 ├── remote_host_example.yaml               → remotehost/
 ├── iot_factory_remote_host_example.yaml   → iot_factory/
+├── iot_factory_example_for_DDPC.yaml      → vm/ + iot_factory/ddpc/ (uses iot_factory/ playbooks and inputs)
 ├── vm/                    shared VM component
 │   ├── definitions.yaml, inputs.yaml, outputs.yaml
 │   ├── scripts/           network, serial-port, password, netplan, proxy and IP helpers
@@ -102,7 +104,8 @@ infra-dev-apps/
 ├── compose_app/
 │   └── scripts/           compose_ops.py (validation, drift, update gate)
 ├── remotehost/            Fabric node templates (no proxy)
-├── iot_factory/           Ansible node templates (direct SSH)
+├── iot_factory/           Ansible node templates (direct SSH); remote_host_inputs.yaml; inputs.yaml (shared)
+│   ├── ddpc/              Ansible node templates and capabilities for the DDPC VM (eo-proxy)
 │   └── playbooks/         preflight, install/teardown Docker, deploy/teardown/verify stack, join/leave hub, templates/, files/ (flows, dashboards), callback_plugins/
 └── CHANGELOG.md
 ```
@@ -121,7 +124,7 @@ infra-dev-apps/
 | nginx_app | A running **simple_vm** deployment, with internet access from the VM to `github.com` and the Ubuntu apt mirrors |
 | container_based, compose_app | The Endpoint can pull the container images, from the internet (`mirror.gcr.io`, `docker.io`, …) or a local registry |
 | remote_host | An Ubuntu 22.04+ host reachable by SSH from the orchestrator, with `git` installed (minimal Ubuntu images don't include it), a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `github.com` and apt |
-| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 1885, 3000, 8080, 8086 and 9001 (or the ones you choose) must be free. A joining factory must reach the hub's bridge port. |
+| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 1885, 3000, 8080, 8086 and 9001 (or the ones you choose) must be free. A joining factory must reach the hub's bridge port. On DDPC (`iot_factory_example_for_DDPC.yaml`): an OS Image Secret for an **Ubuntu 24.04** cloud image, and a network segment that gives the VM internet access and is reachable from your browser (a bridged segment with DHCP is simplest). |
 
 ### Creating secrets
 
@@ -924,6 +927,22 @@ The plugin also retries failed playbooks (exit code 2), not only unreachable hos
 | `influxdb_url` | `http://<remote_host>:<influxdb_port>` |
 | `stack_admin_credentials` | Name of the stack credentials secret |
 
+### iot_factory on a DDPC VM
+
+**Entry file:** `iot_factory_example_for_DDPC.yaml` · **Components:** `vm/` + `iot_factory/ddpc/` · **Deploy On:** a DDPC Endpoint
+
+The same demo, but instead of an existing host the deployment creates the **simple_vm** VM (cloud-init, generated SSH key, bcrypt password; see [simple_vm](#3-simple_vm)) and installs the stack into it. Ansible reaches the VM through the **Endpoint proxy** (eo-proxy), the same way as [mqtt_nodered](#4-mqtt_nodered), so the orchestrator never needs a route to the VM's network.
+
+A single entry with a "remote host or DDPC VM" switch was considered and rejected. The VM nodes read the Endpoint from the parent environment (`get_environment_capability: ece_service_tag`), so every deployment of such an entry would need a DDPC Endpoint in **Deploy On**, even for a remote host. The Ansible inventory is also different (eo-proxy `inventory_proxy_settings` instead of direct SSH), so every Ansible node would exist twice behind `scalable` gates.
+
+- **Inputs:** the simple_vm inputs (artifact, VM, device passthrough, network) plus the iot_factory inputs, minus the four remote-host inputs. **`os_image_secret` must point to an Ubuntu 24.04 cloud image**, or preflight stops the deployment. The VM defaults (2 vCPUs, 4 GB RAM, 50 GB disk) are enough. Use 4 vCPUs and 8 GB for a hub with several joined factories.
+- **Network:** the services are published on the VM's first NIC, and the capabilities use that IP (`vm_ip`). Choose a **bridged** segment with DHCP or a static IP on a network your browser can reach. On a NAT segment the capabilities show the VM's private address: add port-forward rules for the service ports and use the Endpoint's host IP instead. The VM needs internet access (Docker apt repo, Docker Hub).
+- **Nodes:** `ssh_keys` → `binary_image` → `prepare_config` → `cloudinit` → `vm` → `vm_info` (proxy target and VM IP), then `preflight` → `install_docker` → `deploy_stack` → `verify_demo` (→ `accept_joins` / `join_hub`), defined in `iot_factory/ddpc/definitions.yaml`. `ANSIBLE_SSH_RETRIES` is set to 10: each eo-proxy session is published as a new cluster service whose DNS name takes a minute or two to resolve, and without SSH retries every node's first connection fails as unreachable.
+- **Uninstall** deletes the VM (and the uploaded image), which removes Docker, the stack and any bridge, so there are no teardown playbooks on this entry.
+- **Capabilities:** the iot_factory capabilities with `<remote_host>` replaced by the VM IP, plus the simple_vm capabilities (`service_tag`, `vm_name`, `vm_ip`, `vm_user_name`, `vm_ssh_private_key`, …).
+- **Joining:** both entries expose the same join capabilities, so a DDPC factory can join a remote-host hub and the other way round, as long as the joiner can reach the hub's bridge port.
+- **Upload size:** as above, upload this entry with only its own files (`iot_factory_example_for_DDPC.yaml`, `vm/`, `iot_factory/`, `CHANGELOG.md`) to keep the per-node playbook download short.
+
 ---
 
 ## 10. Deploying and tearing down
@@ -936,7 +955,7 @@ The plugin also retries failed playbooks (exit code 2), not only unreachable hos
 **Deploy**
 
 1. Select the blueprint and click **Deploy**.
-2. In **Deploy On**, pick the target: a DDPC Endpoint, a simple_vm deployment (nginx_app), or nothing (remote_host, iot_factory).
+2. In **Deploy On**, pick the target: a DDPC Endpoint, a simple_vm deployment (nginx_app), or nothing (remote_host, iot_factory remote host).
 3. Fill in the inputs. Required inputs have no default.
 4. Follow progress on the deployment's **Logs** tab and the Endpoint's **Virtual Machines** / **Containers** tabs. When the deployment finishes, the **Inputs/Capabilities** tab shows the connection details.
 
