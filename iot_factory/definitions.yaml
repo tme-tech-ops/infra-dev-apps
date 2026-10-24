@@ -154,6 +154,8 @@ node_templates:
       <<: *ansible_common_properties
       playbook_path: iot_factory/playbooks/accept_joins.yaml
       run_data:
+        factory_site: { get_input: factory_site }
+        factory_line: { get_input: factory_line }
         bridge_port: { get_input: bridge_port }
         admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
         bridge_username: { get_secret: [{ get_input: bridge_credentials }, username] }

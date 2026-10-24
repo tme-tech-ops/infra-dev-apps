@@ -74,7 +74,11 @@
             - name: bridge.acl
               content: |
                 # Joined factories: publish telemetry, receive commands. Nothing else.
+                # The hub's own line is denied, so a joiner cannot impersonate it or
+                # read its commands. Joiners sharing these credentials are trusted
+                # with each other's lines; use one hub per untrusted party.
                 user {{ bridge_username }}
+                topic deny factory/{{ factory_site }}/{{ factory_line }}/#
                 topic write factory/+/+/+/telemetry
                 topic read factory/+/+/+/cmd
                 topic read factory/+/+/chaos
