@@ -9,6 +9,7 @@ services:
     ports:
       - "{{ mqtt_port }}:1883"
       - "{{ mqtt_ws_port }}:9001"
+      - "{{ bridge_port }}:1885"
     volumes:
       - ./mosquitto/config:/mosquitto/config:ro
     healthcheck:

@@ -121,7 +121,7 @@ infra-dev-apps/
 | nginx_app | A running **simple_vm** deployment, with internet access from the VM to `github.com` and the Ubuntu apt mirrors |
 | container_based, compose_app | The Endpoint can pull the container images, from the internet (`mirror.gcr.io`, `docker.io`, …) or a local registry |
 | remote_host | An Ubuntu 22.04+ host reachable by SSH from the orchestrator, with `git` installed (minimal Ubuntu images don't include it), a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `github.com` and apt |
-| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 3000, 8080, 8086 and 9001 (or the ones you choose) must be free. A joining factory must reach the hub's MQTT port. |
+| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 1885, 3000, 8080, 8086 and 9001 (or the ones you choose) must be free. A joining factory must reach the hub's bridge port. |
 
 ### Creating secrets
 
@@ -136,6 +136,7 @@ Secrets are created in the Orchestrator UI under **Administration > Security > S
 | NGINX credentials | Basic Auth Credentials | Username, Password | nginx_app, remote_host |
 | Remote host SSH key | SSH private key | SSH Private Key | remote_host, iot_factory |
 | Stack admin login | Basic Auth Credentials | Username, Password (8+ characters) | iot_factory |
+| Bridge login | Basic Auth Credentials | Username (different from the stack login), Password (8+ characters) | iot_factory hub (Accept Joins) |
 
 **OS image (Binary Configuration)**
 
@@ -758,10 +759,13 @@ The **Site** and **Line** selectors filter every panel when factories are joined
 
 ### Joining factories
 
-Deploy the blueprint again on a second Ubuntu 24.04 host with a **different Factory Site or Production Line**, set **Join A Hub Factory** to true, and enter the first deployment's ID as **Hub Deployment ID**. The `join_hub` node reads the hub's `mqtt_host`, `mqtt_port`, `mqtt_topic_root` and `stack_admin_credentials` capabilities. It then adds a Mosquitto bridge on the joining factory:
+1. **Hub:** deploy (or redeploy) one factory with **Accept Joins** set to true and a **Bridge Credentials** secret, which is a second Basic Auth Credentials secret with a different username from the stack login. The `accept_joins` node opens a dedicated bridge listener on **Bridge Port** (default 1885). Its own password file and ACL let the bridge user **only publish `factory/+/+/+/telemetry` and receive `…/cmd` and `…/chaos`**: it can't read other lines, see alerts, send commands or use the stack admin login.
+2. **Joining factory:** deploy the blueprint on a second Ubuntu 24.04 host with a **different Factory Site or Production Line**. Set **Join A Hub Factory** to true, and enter the hub's deployment ID as **Hub Deployment ID**. The `join_hub` node reads the hub's `mqtt_host`, `bridge_port`, `mqtt_topic_root`, `accepts_joins` and `bridge_credentials` capabilities. It then adds a Mosquitto bridge on the joining factory:
 
 - `factory/<site>/<line>/+/telemetry` flows **out** to the hub. The hub's rules engine raises alerts for the new line, its InfluxDB stores it, and its Grafana (Site/Line selectors, Factory network table) and control room show it.
 - `factory/<site>/<line>/+/cmd` and `…/chaos` flow **in** from the hub. The hub's control room, terminal (`inject cnc-02 tool_wear worcester/line-2`) and MQTT clients can inject faults into the joined line.
+
+The hub's rules engine validates every telemetry message before storing or displaying it: site, line and machine must be lowercase IDs that match the topic, the state must be a known one, and the metrics must be numeric. Malformed messages are dropped and counted.
 
 Each factory still runs its own stack and dashboards. The hub is the place that sees and controls them all. Any number of factories can join one hub. Uninstalling a joined factory removes its bridge first.
 
@@ -771,8 +775,9 @@ Each factory still runs its own stack and dashboards. The hub is the place that 
 |---|---|---|---|
 | `ssh_private_key` | SSH private key | Yes | Private key matching an `authorized_keys` entry on the remote host |
 | `stack_admin_credentials` | Basic Auth Credentials | Yes | One login for the Node-RED editor, control room and API, Grafana admin, InfluxDB admin and the MQTT users. The password must be at least 8 characters, and the username must not contain `:` |
+| `bridge_credentials` | Basic Auth Credentials | Hub only (Accept Joins) | The login joining factories use for the bridge listener. Use a different username from the stack login; the password must be at least 8 characters. |
 
-The credentials never appear in compose files or environment variables. They are written to `/opt/iot-factory/secrets` (a root-only directory) and mounted as compose secrets. Node-RED and Mosquitto store only hashes (bcrypt / PBKDF2). A joining factory reads the hub's credentials secret by name from the hub's capabilities, and writes them into its bridge config (mode 0600).
+The credentials never appear in compose files or environment variables. They are written to `/opt/iot-factory/secrets` (a root-only directory) and mounted as compose secrets. Node-RED and Mosquitto store only hashes (bcrypt / PBKDF2). A joining factory reads the hub's **bridge** credentials secret by name from the hub's `bridge_credentials` capability, and writes them into its bridge config (mode 0600). It never sees the hub's stack admin login.
 
 ### Inputs
 
@@ -791,12 +796,15 @@ The credentials never appear in compose files or environment variables. They are
 
 **Service Ports**: `mqtt_port` (`1883`), `nodered_port` (`1880`), `grafana_port` (`3000`), `influxdb_port` (`8086`), `mqtt_ws_port` (`9001`), `mqttx_web_port` (`8080`), each 1024–65535.
 
-**Join Another Factory**
+**Factory Network**
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
+| `accept_joins` | Accept Joins (Act As Hub) | boolean | `false` | ✗ | Adds the `accept_joins` node |
+| `bridge_credentials` | Bridge Credentials Secret | secret_key | – | ✗ | Shown when `accept_joins` is set. Schema `basic_auth_credentials` |
+| `bridge_port` | Bridge Port | integer | `1885` | ✗ | 1024–65535 |
 | `join_hub` | Join A Hub Factory | boolean | `false` | ✗ | Adds the `join_hub` node |
-| `hub_deployment_id` | Hub Deployment ID | string | `""` | ✗ | Shown when `join_hub` is set. The ID of a running iot_factory deployment. |
+| `hub_deployment_id` | Hub Deployment ID | string | `""` | ✗ | Shown when `join_hub` is set. The ID of a running iot_factory deployment with Accept Joins on. |
 
 **Ansible Settings**
 
@@ -814,7 +822,8 @@ Defined in `iot_factory/definitions.yaml`. All are `dell.nodes.ansible.Executor`
 2. **`install_docker`** (`install_docker.yaml`): Docker CE and the compose plugin from Docker's apt repository. An existing Docker engine is left alone. A marker in `/etc/iot-factory` records whether this blueprint installed Docker. **Uninstall** (`stop` → `teardown_docker.yaml`) purges Docker, its repo, key and data **only if** the marker exists.
 3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run, hashes passwords on the host, and applies the InfluxDB dashboard as an `influx` stack. Re-runs are idempotent: nothing changes or restarts unless an input or file did. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
 4. **`verify_demo`** (`verify_demo.yaml`): proves the demo works. It checks that telemetry arrives on MQTT, anonymous MQTT and unauthenticated API calls are refused, and the control room, MQTTX Web and websocket listener are up. It checks that a jam injected through `/api/fault` raises an alert, which it then clears, that telemetry and alerts are in InfluxDB, and that the Grafana dashboard is provisioned.
-5. **`join_hub`** (`join_hub.yaml`, only when `join_hub` is true): writes the Mosquitto bridge and restarts the broker. It waits for the bridge to connect, then confirms from this host that the hub's broker receives this line's telemetry. **Uninstall** (`stop` → `leave_hub.yaml`) removes the bridge.
+5. **`accept_joins`** (`accept_joins.yaml`, only when `accept_joins` is true): hashes the bridge password, writes the bridge listener, its password file and its ACL into `mosquitto/config/conf.d/`, and restarts the broker. **Uninstall** (`stop` → `close_joins.yaml`) closes the listener.
+6. **`join_hub`** (`join_hub.yaml`, only when `join_hub` is true): checks that the hub accepts joins and that its bridge port is reachable. It writes the Mosquitto bridge, restarts the broker and waits for the bridge to report connected. **Uninstall** (`stop` → `leave_hub.yaml`) removes the bridge.
 
 **Logging:** each playbook prints one line per task and ends with a single `IOT-FACTORY [<node>] OK: …` summary. On failure, it ends with a single `IOT-FACTORY [<node>] FAILED at '<task>': <reason> | <last stderr lines>. Hint: …` line. Search the deployment log for `IOT-FACTORY` to find it; the workflow's own error is the plugin's generic "Number of attempts" text. Two ansible-plugin behaviours shape this:
 
@@ -839,7 +848,8 @@ The plugin also retries failed playbooks (exit code 2), not only unreachable hos
 | `mqttx_web_url` | `http://<remote_host>:<mqttx_web_port>` |
 | `mqtt_websocket_url` | `ws://<remote_host>:<mqtt_ws_port>/mqtt` |
 | `mqtt_endpoint` | `tcp://<remote_host>:<mqtt_port>` |
-| `mqtt_host`, `mqtt_port` | Broker host and port (read by joining factories) |
+| `mqtt_host`, `mqtt_port` | Broker host and client port |
+| `accepts_joins`, `bridge_port`, `bridge_credentials` | Join settings read by joining factories (`bridge_credentials` is the secret *name*) |
 | `mqtt_topic_root` | `factory/<site>/<line>` |
 | `nodered_editor_url` | `http://<remote_host>:<nodered_port>/` |
 | `fault_injection_api` | `http://<remote_host>:<nodered_port>/api/fault` |

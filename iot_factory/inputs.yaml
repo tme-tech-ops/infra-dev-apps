@@ -258,6 +258,56 @@ inputs:
 
 # Join another factory
 
+  accept_joins:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Accept Joins (Act As Hub)
+    description: |
+      Let other IoT Smart Factory deployments join this one. Opens a bridge
+      listener that only accepts the Bridge Credentials, and only lets them
+      publish telemetry and receive commands.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: join
+      index: 37
+
+  bridge_credentials:
+    type: secret_key
+    hidden: false
+    required: false
+    only_with: accept_joins
+    allow_update: false
+    display_label: Bridge Credentials Secret
+    description: |
+      Name of a Basic Auth Credentials secret that joining factories use to
+      connect. Use a different username than the stack admin login. The
+      password must be at least 8 characters.
+    constraints:
+      - type: basic_auth_credentials
+        error_message: Select a Basic Auth Credentials secret.
+    display:
+      group: join
+      index: 38
+
+  bridge_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Bridge Port
+    description: |
+      Host TCP port of the bridge listener that joining factories connect to.
+    default: 1885
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be a TCP port between 1024 and 65535.
+    display:
+      group: join
+      index: 39
+
   join_hub:
     type: boolean
     hidden: false
@@ -284,8 +334,9 @@ inputs:
     allow_update: false
     display_label: Hub Deployment ID
     description: |
-      Deployment ID of the hub IoT Smart Factory deployment. Its MQTT host,
-      port and credentials secret are read from its capabilities.
+      Deployment ID of the hub IoT Smart Factory deployment (deployed with
+      Accept Joins). Its host, bridge port and bridge credentials secret are
+      read from its capabilities.
     default: ""
     constraints:
       - pattern: ^$|^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$

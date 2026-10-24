@@ -17,6 +17,14 @@
   tasks:
     - name: Join the hub
       block:
+        - name: Check the hub accepts joins
+          ansible.builtin.assert:
+            that: hub_accepts_joins | bool
+            fail_msg: >-
+              The hub deployment does not accept joins. Redeploy the hub with Accept Joins set
+              to true and a Bridge Credentials secret.
+            quiet: true
+
         - name: Check this line is not the hub's own line
           ansible.builtin.assert:
             that: hub_topic_root != topic_root
@@ -83,43 +91,15 @@
             that: bridge_state.stdout | trim == '1'
             fail_msg: >-
               The bridge to {{ hub_host }}:{{ hub_port }} did not connect. Check that the hub
-              deployment's stack admin credentials are correct and the hub broker is running
+              deployment's bridge credentials are correct and the hub broker is running
               ('docker compose -f {{ stack_dir }}/compose.yaml logs mosquitto' on this host).
             quiet: true
-
-        - name: Check the hub receives this line's telemetry
-          ansible.builtin.command:
-            argv:
-              - docker
-              - compose
-              - exec
-              - -T
-              - mosquitto
-              - mosquitto_sub
-              - -h
-              - "{{ hub_host }}"
-              - -p
-              - "{{ hub_port | string }}"
-              - -u
-              - "{{ hub_username }}"
-              - -P
-              - "{{ hub_password }}"
-              - -t
-              - "{{ topic_root }}/+/telemetry"
-              - -C
-              - "1"
-              - -W
-              - "20"
-            chdir: "{{ stack_dir }}"
-          register: hub_sees
-          changed_when: false
-          no_log: true
 
         - name: Joined the hub
           ansible.builtin.debug:
             msg: >-
               IOT-FACTORY [join_hub] OK: bridge {{ bridge_name }} connected to {{ hub_host }}:{{ hub_port }}.
-              The hub receives {{ topic_root }}/+/telemetry and can send commands to {{ topic_root }}.
+              This line's telemetry now flows to the hub, and the hub can send commands to {{ topic_root }}.
               Open the hub's Grafana (Site/Line selectors) or control room to see this line.
 
       rescue:

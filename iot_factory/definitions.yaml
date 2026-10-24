@@ -57,6 +57,7 @@ dsl_definitions:
     influxdb_port: { get_input: influxdb_port }
     mqtt_ws_port: { get_input: mqtt_ws_port }
     mqttx_web_port: { get_input: mqttx_web_port }
+    bridge_port: { get_input: bridge_port }
     public_host: { get_input: remote_host }
     admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
     admin_password: { get_secret: [{ get_input: stack_admin_credentials }, password] }
@@ -80,6 +81,7 @@ node_templates:
           - { get_input: influxdb_port }
           - { get_input: mqtt_ws_port }
           - { get_input: mqttx_web_port }
+          - { get_input: bridge_port }
 
   # Docker CE from the official apt repository. Uninstall removes Docker only
   # if this blueprint installed it.
@@ -136,6 +138,40 @@ node_templates:
       - type: dell.relationships.depends_on
         target: deploy_stack
 
+  # Optional (hub side): a bridge listener with its own credentials and an ACL,
+  # so joining factories never get the stack admin login. Instantiated only
+  # when accept_joins is true, so the bridge secret is never looked up otherwise.
+  accept_joins:
+    type: dell.nodes.ansible.Executor
+    capabilities:
+      scalable:
+        properties:
+          default_instances:
+            jmespath:
+              - 'length([?accept_joins == `true`]) || `0`'
+              - [{"accept_joins": { get_input: accept_joins }}]
+    properties: &accept_joins_properties
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/accept_joins.yaml
+      run_data:
+        bridge_port: { get_input: bridge_port }
+        admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
+        bridge_username: { get_secret: [{ get_input: bridge_credentials }, username] }
+        bridge_password: { get_secret: [{ get_input: bridge_credentials }, password] }
+      sensitive_keys:
+        - ansible_password
+        - bridge_password
+    interfaces:
+      dell.interfaces.lifecycle:
+        stop:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *accept_joins_properties
+            playbook_path: iot_factory/playbooks/close_joins.yaml
+    relationships:
+      - type: dell.relationships.depends_on
+        target: verify_demo
+
   # Optional: bridge this factory's line into a hub factory (another deployment
   # of this blueprint). Instantiated only when join_hub is true, so the hub
   # capabilities and secret are never looked up for a standalone factory.
@@ -155,15 +191,16 @@ node_templates:
         factory_site: { get_input: factory_site }
         factory_line: { get_input: factory_line }
         hub_host: { get_capability: [{ get_input: hub_deployment_id }, mqtt_host] }
-        hub_port: { get_capability: [{ get_input: hub_deployment_id }, mqtt_port] }
+        hub_port: { get_capability: [{ get_input: hub_deployment_id }, bridge_port] }
+        hub_accepts_joins: { get_capability: [{ get_input: hub_deployment_id }, accepts_joins] }
         hub_topic_root: { get_capability: [{ get_input: hub_deployment_id }, mqtt_topic_root] }
         hub_username:
           get_secret:
-            - { get_capability: [{ get_input: hub_deployment_id }, stack_admin_credentials] }
+            - { get_capability: [{ get_input: hub_deployment_id }, bridge_credentials] }
             - username
         hub_password:
           get_secret:
-            - { get_capability: [{ get_input: hub_deployment_id }, stack_admin_credentials] }
+            - { get_capability: [{ get_input: hub_deployment_id }, bridge_credentials] }
             - password
       sensitive_keys:
         - ansible_password

@@ -46,10 +46,13 @@ input_groups:
       - mqtt_ws_port
       - mqttx_web_port
   join:
-    display_label: Join Another Factory
+    display_label: Factory Network
     collapsible: true
     index: 3
     inputs:
+      - accept_joins
+      - bridge_credentials
+      - bridge_port
       - join_hub
       - hub_deployment_id
   ansible_settings:

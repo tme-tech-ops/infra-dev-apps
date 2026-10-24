@@ -1,0 +1,131 @@
+---
+# Hub side of joining: a dedicated, password-protected bridge listener with an
+# ACL. Joining factories log in with the bridge credentials (not the stack admin
+# login) and may only publish telemetry and receive commands.
+- name: IoT Smart Factory - accept joins
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+    conf_dir: "{{ stack_dir }}/mosquitto/config/conf.d"
+    images_mosquitto: eclipse-mosquitto:2.0.22
+
+  tasks:
+    - name: Accept joins
+      block:
+        - name: Validate the bridge credentials
+          ansible.builtin.assert:
+            that:
+              - bridge_username | length > 0
+              - "':' not in bridge_username"
+              - bridge_password | length >= 8
+              - bridge_username != admin_username
+            fail_msg: >-
+              The bridge credentials secret is invalid: the username must be set, must not
+              contain ':' and must differ from the stack admin username, and the password
+              must be at least 8 characters.
+            quiet: true
+
+        - name: Fingerprint the bridge credentials
+          ansible.builtin.set_fact:
+            bridge_fingerprint: "{{ (bridge_username ~ ':' ~ bridge_password) | hash('sha256') }}"
+          no_log: true
+
+        - name: Read the fingerprint of the bridge credentials currently deployed
+          ansible.builtin.slurp:
+            src: "{{ stack_dir }}/secrets/bridge.sha256"
+          register: deployed_fingerprint
+          failed_when: false
+
+        - name: Write the bridge password file (plain text, hashed in the next task)
+          when: deployed_fingerprint.content is not defined or (deployed_fingerprint.content | b64decode) != bridge_fingerprint
+          ansible.builtin.copy:
+            dest: "{{ conf_dir }}/bridge.passwd"
+            content: "{{ bridge_username }}:{{ bridge_password }}\n"
+            owner: "1883"
+            group: "1883"
+            mode: "0600"
+          register: bridge_passwd
+          no_log: true
+
+        - name: Hash the bridge password file
+          when: bridge_passwd is changed
+          ansible.builtin.command:
+            argv: [docker, run, --rm, -v, "{{ conf_dir }}:/conf", --entrypoint, mosquitto_passwd, "{{ images_mosquitto }}", -U, /conf/bridge.passwd]
+          changed_when: true
+
+        - name: Set bridge password file ownership
+          ansible.builtin.file:
+            path: "{{ conf_dir }}/bridge.passwd"
+            owner: "1883"
+            group: "1883"
+            mode: "0700"
+
+        - name: Write the bridge ACL and listener
+          ansible.builtin.copy:
+            dest: "{{ conf_dir }}/{{ item.name }}"
+            content: "{{ item.content }}"
+            owner: "1883"
+            group: "1883"
+            mode: "0644"
+          loop:
+            - name: bridge.acl
+              content: |
+                # Joined factories: publish telemetry, receive commands. Nothing else.
+                user {{ bridge_username }}
+                topic write factory/+/+/+/telemetry
+                topic read factory/+/+/+/cmd
+                topic read factory/+/+/chaos
+            - name: bridge-listener.conf
+              content: |
+                # Managed by the infra-dev-apps IoT Smart Factory blueprint (accept_joins).
+                listener 1885
+                allow_anonymous false
+                password_file /mosquitto/config/conf.d/bridge.passwd
+                acl_file /mosquitto/config/conf.d/bridge.acl
+          loop_control:
+            label: "{{ item.name }}"
+          register: bridge_files
+
+        - name: Restart the broker to open the bridge listener
+          when: bridge_passwd is changed or bridge_files is changed
+          ansible.builtin.command:
+            cmd: docker compose restart mosquitto
+            chdir: "{{ stack_dir }}"
+          changed_when: true
+
+        - name: Wait for the stack to be healthy
+          ansible.builtin.command:
+            cmd: docker compose up --detach --wait --wait-timeout 120
+            chdir: "{{ stack_dir }}"
+          changed_when: false
+
+        - name: Check the bridge listener is open
+          ansible.builtin.wait_for:
+            host: 127.0.0.1
+            port: "{{ bridge_port | int }}"
+            timeout: 15
+
+        - name: Record the deployed bridge credentials fingerprint
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/secrets/bridge.sha256"
+            content: "{{ bridge_fingerprint }}"
+            mode: "0600"
+          no_log: true
+
+        - name: Accepting joins
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [accept_joins] OK: bridge listener open on port {{ bridge_port }} for user
+              {{ bridge_username }} (publish telemetry, receive commands only). Other factories can
+              now join with Hub Deployment ID = this deployment.
+
+      rescue:
+        - name: Accepting joins failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [accept_joins] FAILED at '{{ ansible_failed_task.name }}':
+              {{ '(details hidden: task handles credentials)' if ansible_failed_result.censored is defined
+                 else ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}

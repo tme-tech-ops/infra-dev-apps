@@ -23,12 +23,24 @@ capabilities:
     value: { concat: ['ws://', { get_input: remote_host }, ':', { get_input: mqtt_ws_port }, '/mqtt'] }
 
   mqtt_host:
-    description: MQTT broker host (used by factories that join this one)
+    description: MQTT broker host (also used by factories that join this one)
     value: { get_input: remote_host }
 
   mqtt_port:
-    description: MQTT broker port (used by factories that join this one)
+    description: MQTT broker port for clients
     value: { get_input: mqtt_port }
+
+  accepts_joins:
+    description: Whether other factories can join this one (Accept Joins)
+    value: { get_input: accept_joins }
+
+  bridge_port:
+    description: Bridge listener port for joining factories
+    value: { get_input: bridge_port }
+
+  bridge_credentials:
+    description: Name of the secret joining factories use to connect (empty unless Accept Joins is on)
+    value: { get_input: bridge_credentials }
 
   nodered_editor_url:
     description: Node-RED editor (simulator, fault injection buttons and alert rules)

@@ -1,0 +1,47 @@
+---
+# Uninstall of accept_joins: closes the bridge listener.
+- name: IoT Smart Factory - close joins
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+    conf_dir: "{{ stack_dir }}/mosquitto/config/conf.d"
+
+  tasks:
+    - name: Close joins
+      block:
+        - name: Remove the bridge listener, ACL and password file
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "{{ conf_dir }}/bridge-listener.conf"
+            - "{{ conf_dir }}/bridge.acl"
+            - "{{ conf_dir }}/bridge.passwd"
+            - "{{ stack_dir }}/secrets/bridge.sha256"
+          register: removed
+
+        - name: Check for the stack compose file
+          ansible.builtin.stat:
+            path: "{{ stack_dir }}/compose.yaml"
+          register: compose_file
+
+        - name: Restart the broker without the bridge listener
+          when: removed is changed and compose_file.stat.exists
+          ansible.builtin.command:
+            cmd: docker compose restart mosquitto
+            chdir: "{{ stack_dir }}"
+          changed_when: true
+
+        - name: Joins closed
+          ansible.builtin.debug:
+            msg: "IOT-FACTORY [accept_joins] UNINSTALL OK: bridge listener {{ 'closed' if removed is changed else 'was not open' }}."
+
+      rescue:
+        - name: Closing joins failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [accept_joins] UNINSTALL FAILED at '{{ ansible_failed_task.name }}':
+              {{ ([ansible_failed_result.msg | default('')] + (ansible_failed_result.stderr_lines | default([]))[-3:]) | select | join(' | ') }}

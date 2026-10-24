@@ -20,7 +20,8 @@ affected.
   (STARVED), runtime chaos mode that runs alongside manual faults, scenarios,
   a Node-RED control room (`/control`: live line cards, fault buttons,
   terminal, live MQTT feed), MQTTX Web with a Mosquitto websocket listener,
-  multi-factory joining over a Mosquitto bridge (`join_hub`), a reworked
+  multi-factory joining over a Mosquitto bridge (`accept_joins` on the hub
+  with a dedicated, ACL-limited bridge login; `join_hub` on the joiner), a reworked
   Grafana dashboard (how-to, fault build-up, factory network, data pipeline
   health, site/line selectors) and an InfluxDB Database Health dashboard.
 - Changed: DDPC rebrand. The collection now targets Dell Distributed Private
