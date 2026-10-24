@@ -103,7 +103,7 @@ infra-dev-apps/
 │   └── scripts/           compose_ops.py (validation, drift, update gate)
 ├── remotehost/            Fabric node templates (no proxy)
 ├── iot_factory/           Ansible node templates (direct SSH)
-│   └── playbooks/         preflight, install/teardown Docker, deploy/teardown/verify stack, templates/, files/ (flows, dashboard)
+│   └── playbooks/         preflight, install/teardown Docker, deploy/teardown/verify stack, templates/, files/ (flows, dashboard), callback_plugins/
 └── CHANGELOG.md
 ```
 
@@ -744,7 +744,12 @@ Defined in `iot_factory/definitions.yaml`. All four are `dell.nodes.ansible.Exec
 3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run and hashes passwords on the host. Re-runs are idempotent: nothing changes or restarts unless an input or file did. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
 4. **`verify_demo`** (`verify_demo.yaml`): proves the demo works through the same paths a presenter uses. It checks that telemetry arrives on MQTT, that anonymous MQTT and unauthenticated API calls are refused, and that a jam injected through `/api/fault` raises an alert, which it then clears. It also checks that telemetry and alerts are in InfluxDB and that the dashboard is provisioned.
 
-**Logging:** each playbook prints one line per task and ends with a single `IOT-FACTORY [<node>] OK: …` summary. On failure, it ends with a single `IOT-FACTORY [<node>] FAILED at '<task>': <reason>. Hint: …` line. The ansible plugin always adds the full playbook output to a failed operation's error. The blueprint therefore uses Ansible's `default` callback (skipped tasks hidden, YAML results) rather than `json`, which would make the plugin report every task as an error. Tasks that handle secrets are `no_log`.
+**Logging:** each playbook prints one line per task and ends with a single `IOT-FACTORY [<node>] OK: …` summary. On failure, it ends with a single `IOT-FACTORY [<node>] FAILED at '<task>': <reason>. Hint: …` line; search the deployment log for `IOT-FACTORY` to find it. The workflow's own error message is the plugin's generic "Number of attempts" text. Two ansible-plugin behaviours shape this:
+
+- The plugin always runs `ansible-playbook -v`, so Ansible's default output would dump every task result into the log (over 1,000 log lines for an install). `playbooks/callback_plugins/iot_factory.py` is the default callback rendered one verbosity level lower: `ansible_debug_level` 0–1 gives one line per task, and 2–3 add detail.
+- The plugin adds the full playbook output to a failed operation's error, and with the `json` callback it also reports every task as an error. YAML-formatted default output avoids that.
+
+The plugin also retries failed playbooks (exit code 2), not only unreachable hosts. `preflight` sets `number_of_attempts: 1` so that a failed check is final, and the other nodes allow one retry. Tasks that handle secrets are `no_log`.
 
 **Uninstall** returns the host to its pre-install state: stack, volumes, images and, if this blueprint installed it, Docker. `ca-certificates`, `curl` and `python3-debian` stay installed.
 
@@ -785,6 +790,7 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 ## 11. Known issues and limitations
 
 - **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. compose_app's login wiring will work unchanged once the platform is fixed.
+- **SSH host keys are not verified** by remote_host and iot_factory (`StrictHostKeyChecking=no`), the same as the eo-proxy blueprints. To harden this, pin the host key in a `known_hosts` file and pass it with `ansible_ssh_common_args` (Ansible) or `connect_kwargs` (Fabric).
 - **iot_factory is tested only on Ubuntu 24.04 LTS** and refuses other systems at preflight. It needs internet access (Docker apt repo, Docker Hub); there is no air-gapped mode yet. Changing `stack_admin_credentials` after the first install updates Node-RED, Grafana's login file and MQTT, but not the InfluxDB or Grafana admin passwords already stored in their databases.
 - **Day-2 is only supported by compose_app.** The other entry points support install and uninstall; a deployment update on simple_vm only refreshes the VM IP.
 - **Shared SSH key:** all simple_vm / mqtt_nodered deployments share the `example_key` key pair. To give a copy its own key, change `key_name` in `vm/definitions.yaml`.
