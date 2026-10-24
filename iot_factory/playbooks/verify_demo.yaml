@@ -1,0 +1,140 @@
+---
+# End-to-end check that the demo really works, through the same paths a
+# presenter uses: MQTT telemetry, the fault injection API, the alert pipeline,
+# InfluxDB and the Grafana dashboard. Leaves no fault active.
+- name: IoT Smart Factory - verify demo
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+    influx_org: iot-factory
+    topic_root: "factory/{{ factory_site }}/{{ factory_line }}"
+    nodered_api: "http://127.0.0.1:{{ nodered_port }}/api"
+
+  tasks:
+    - name: Verify the demo
+      block:
+        - name: Wait for machine telemetry on MQTT
+          ansible.builtin.command:
+            cmd: >-
+              docker compose exec -T mosquitto mosquitto_sub -h localhost -p 1884
+              -t {{ topic_root }}/+/telemetry -C 3 -W 30
+            chdir: "{{ stack_dir }}"
+          register: telemetry
+          changed_when: false
+          retries: 4
+          delay: 5
+          until: telemetry.rc == 0
+
+        - name: Check anonymous MQTT clients are refused on the external port
+          ansible.builtin.command:
+            cmd: >-
+              docker compose exec -T mosquitto mosquitto_sub -h localhost -p 1883
+              -t {{ topic_root }}/# -C 1 -W 5
+            chdir: "{{ stack_dir }}"
+          register: anonymous_mqtt
+          changed_when: false
+          failed_when: anonymous_mqtt.rc == 0
+
+        - name: Check the Node-RED API rejects requests without a login
+          ansible.builtin.uri:
+            url: "{{ nodered_api }}/status"
+            status_code: 401
+
+        - name: Inject a jam on robot-03 through the fault API
+          ansible.builtin.uri:
+            url: "{{ nodered_api }}/fault"
+            method: POST
+            body_format: json
+            body: { machine: robot-03, fault: jam }
+            url_username: "{{ admin_username }}"
+            url_password: "{{ admin_password }}"
+            force_basic_auth: true
+          no_log: true
+
+        - name: Wait for the jam alert to be raised
+          ansible.builtin.uri:
+            url: "{{ nodered_api }}/status"
+            url_username: "{{ admin_username }}"
+            url_password: "{{ admin_password }}"
+            force_basic_auth: true
+            return_content: true
+          register: status_jam
+          until: >-
+            status_jam.json is defined and
+            (status_jam.json.active_alerts | selectattr('machine', 'equalto', 'robot-03') | list | length) > 0
+          retries: 15
+          delay: 2
+          no_log: true
+
+        - name: Clear all faults
+          ansible.builtin.uri:
+            url: "{{ nodered_api }}/fault"
+            method: POST
+            body_format: json
+            body: { machine: all, fault: none }
+            url_username: "{{ admin_username }}"
+            url_password: "{{ admin_password }}"
+            force_basic_auth: true
+          no_log: true
+
+        - name: Read the InfluxDB token
+          ansible.builtin.slurp:
+            src: "{{ stack_dir }}/secrets/influx_token"
+          register: influx_token_file
+          no_log: true
+
+        - name: Count telemetry points and alerts in InfluxDB
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:{{ influxdb_port }}/api/v2/query?org={{ influx_org }}"
+            method: POST
+            headers:
+              Authorization: "Token {{ influx_token_file.content | b64decode }}"
+              Content-Type: application/vnd.flux
+              Accept: application/csv
+            body: >-
+              from(bucket: "telemetry") |> range(start: -10m)
+              |> filter(fn: (r) => r._field == "temperature" or r._field == "message")
+              |> group(columns: ["_measurement"]) |> count()
+              |> keep(columns: ["_measurement", "_value"])
+            return_content: true
+          register: influx_counts
+          until: "'alerts' in influx_counts.content and 'machine_telemetry' in influx_counts.content"
+          retries: 10
+          delay: 3
+          no_log: true
+
+        - name: Check Grafana has the dashboard provisioned
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:{{ grafana_port }}/api/dashboards/uid/iot-factory"
+            url_username: "{{ admin_username }}"
+            url_password: "{{ admin_password }}"
+            force_basic_auth: true
+            return_content: true
+          register: dashboard
+          no_log: true
+
+        - name: Demo verified
+          vars:
+            sample: "{{ telemetry.stdout_lines | first | from_json }}"
+            counts: >-
+              {{ influx_counts.content | regex_findall(',(\d+),(alerts|machine_telemetry)\r?$', multiline=true) }}
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [verify_demo] OK: telemetry flowing on {{ topic_root }}/+/telemetry
+              (e.g. {{ sample.machine }} {{ sample.state }} {{ sample.temperature }} C), anonymous MQTT refused,
+              fault API and alert pipeline working (robot-03 jam raised an alert, then cleared),
+              InfluxDB points in the last 10 min: {{ counts | map('reverse') | map('list') | map('join', '=') | join(', ') }},
+              Grafana dashboard '{{ dashboard.json.dashboard.title }}' provisioned.
+
+      rescue:
+        - name: Demo verification failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [verify_demo] FAILED at '{{ ansible_failed_task.name }}':
+              {{ '(details hidden: task handles credentials)' if ansible_failed_result.censored is defined
+                 else ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              Hint: on the host, check 'docker compose -f {{ stack_dir }}/compose.yaml logs node-red'
+              (simulator and rules engine) and '... logs influxdb'.

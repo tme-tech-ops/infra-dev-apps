@@ -19,9 +19,10 @@ Example blueprints for the **Dell Automation Platform (DAP)**, mainly targeting 
 6. [container_based](#6-container_based)
 7. [compose_app](#7-compose_app)
 8. [remote_host](#8-remote_host)
-9. [Deploying and tearing down](#9-deploying-and-tearing-down)
-10. [Known issues and limitations](#10-known-issues-and-limitations)
-11. [Changelog](#11-changelog)
+9. [iot_factory](#9-iot_factory)
+10. [Deploying and tearing down](#10-deploying-and-tearing-down)
+11. [Known issues and limitations](#11-known-issues-and-limitations)
+12. [Changelog](#12-changelog)
 
 ---
 
@@ -47,6 +48,7 @@ Use it to:
 | [`container_based_example_for_DDPC.yaml`](#6-container_based) | Node-RED, InfluxDB and Grafana containers directly on the Endpoint, from a fixed compose file | DDPC Endpoint | edge |
 | [`compose_app_example_for_DDPC.yaml`](#7-compose_app) | **Any** user-supplied compose definition directly on the Endpoint, with an optional registry login and Day-2 updates | DDPC Endpoint | edge |
 | [`remote_host_example.yaml`](#8-remote_host) | NGINX with TLS and basic auth on any SSH-reachable Ubuntu host outside DDPC | none (any orchestrator) | fabric |
+| [`iot_factory_remote_host_example.yaml`](#9-iot_factory) | An IoT Smart Factory demo (Mosquitto, Node-RED line simulator, InfluxDB, Grafana) on a fresh **Ubuntu 24.04** host, installed end-to-end by Ansible over SSH | none (any orchestrator) | ansible |
 
 ### Core features
 
@@ -59,7 +61,7 @@ Use it to:
 - **Containers directly on the Endpoint:** the edge-plugin `NativeEdgeCompose` node type, from a static file (container_based) or a validated user definition (compose_app).
 - **Layering:** nginx_app is deployed *on* a simple_vm deployment and reads its details with `get_environment_capability`.
 - **Day-2:** compose_app supports drift detection and deployment update (`check_drift` / `update` / `postupdate`).
-- **Beyond DDPC:** remote_host runs the same NGINX payload over plain SSH, with no proxy.
+- **Beyond DDPC:** remote_host runs the same NGINX payload over plain SSH, with no proxy. iot_factory builds a full IoT demo on a fresh Ubuntu 24.04 host with Ansible over plain SSH.
 - **DAP UI techniques:** input groups, conditional inputs (`only_with` / `exclusive_with`), constraints filled from inventory, hidden "advanced" inputs, and `dsl_definitions` anchors.
 
 ### Plugins
@@ -69,7 +71,7 @@ Use it to:
 | **edge-plugin** | `>=3.3.33.0,<4.0.0.0` | `NativeEdgeVM`, `BinaryImage`, `NativeEdgeCompose`, `RegistryLogin` node types | simple_vm, mqtt_nodered, container_based, compose_app |
 | **utilities-plugin** | `>=3.2.3.0,<4.0.0.0` | `dell.nodes.keys.RSAKey` (SSH key pair), `dell.nodes.CloudInit.CloudConfig` | simple_vm, mqtt_nodered |
 | **fabric-plugin** | `>=3.4.3.0,<4.0.0.0` | `run_script` / `run_commands` over SSH (through the eo-proxy, or direct) | simple_vm, mqtt_nodered, nginx_app, remote_host |
-| **ansible-plugin** | `>=4.1.9.0,<5.0.0.0` | `dell.nodes.ansible.Executor` (playbooks through the eo-proxy) | mqtt_nodered |
+| **ansible-plugin** | `>=4.1.9.0,<5.0.0.0` | `dell.nodes.ansible.Executor` (playbooks through the eo-proxy, or direct SSH) | mqtt_nodered, iot_factory |
 | Script plugin (built in) | none | Python operations run on the deployment agent (`central_deployment_agent`) | simple_vm, mqtt_nodered, nginx_app, container_based, compose_app |
 
 Plugins are imported in the entry files only (each `definitions.yaml` relies on them). The minimums are the versions DDPC 4.3.0.0 ships; older DDPC releases are not supported.
@@ -86,6 +88,7 @@ infra-dev-apps/
 ├── container_based_example_for_DDPC.yaml  → container_based/
 ├── compose_app_example_for_DDPC.yaml      → compose_app/
 ├── remote_host_example.yaml               → remotehost/
+├── iot_factory_remote_host_example.yaml   → iot_factory/
 ├── vm/                    shared VM component
 │   ├── definitions.yaml, inputs.yaml, outputs.yaml
 │   ├── scripts/           network, serial-port, password, netplan, proxy and IP helpers
@@ -99,6 +102,8 @@ infra-dev-apps/
 ├── compose_app/
 │   └── scripts/           compose_ops.py (validation, drift, update gate)
 ├── remotehost/            Fabric node templates (no proxy)
+├── iot_factory/           Ansible node templates (direct SSH)
+│   └── playbooks/         preflight, install/teardown Docker, deploy/teardown/verify stack, templates/, files/ (flows, dashboard)
 └── CHANGELOG.md
 ```
 
@@ -116,6 +121,7 @@ infra-dev-apps/
 | nginx_app | A running **simple_vm** deployment, with internet access from the VM to `github.com` and the Ubuntu apt mirrors |
 | container_based, compose_app | The Endpoint can pull the container images, from the internet (`mirror.gcr.io`, `docker.io`, …) or a local registry |
 | remote_host | An Ubuntu 22.04+ host reachable by SSH from the orchestrator, with `git` installed (minimal Ubuntu images don't include it), a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `github.com` and apt |
+| iot_factory | An **Ubuntu 24.04** host (2 GB+ RAM, 10 GB+ free disk) reachable by SSH from the orchestrator, a user that is root or has `ALL=(ALL) NOPASSWD:ALL` sudo, the matching public key in `~/.ssh/authorized_keys`, and internet access from the host to `download.docker.com`, the Ubuntu apt mirrors and Docker Hub. Ports 1880, 1883, 3000 and 8086 (or the ones you choose) must be free |
 
 ### Creating secrets
 
@@ -128,7 +134,8 @@ Secrets are created in the Orchestrator UI under **Administration > Security > S
 | Docker registry | Docker Configuration | Username, Password | mqtt_nodered (optional) |
 | Registry login | Basic Auth Credentials | Username, Password | compose_app (optional) |
 | NGINX credentials | Basic Auth Credentials | Username, Password | nginx_app, remote_host |
-| Remote host SSH key | SSH private key | SSH Private Key | remote_host |
+| Remote host SSH key | SSH private key | SSH Private Key | remote_host, iot_factory |
+| Stack admin login | Basic Auth Credentials | Username, Password (8+ characters) | iot_factory |
 
 **OS image (Binary Configuration)**
 
@@ -656,7 +663,106 @@ Defined in `remotehost/definitions.yaml`:
 
 ---
 
-## 9. Deploying and tearing down
+## 9. iot_factory
+
+**Entry file:** `iot_factory_remote_host_example.yaml` · **Component:** `iot_factory/` · **Deploy On:** not needed
+
+> **Tested only on Ubuntu 24.04 LTS** (x86_64). The first node checks `/etc/os-release` and **stops the deployment before changing anything** if the host is not Ubuntu 24.04.
+
+### Description
+
+The collection's showcase demo. Ansible connects to **any SSH-reachable Ubuntu 24.04 host**, starting from a fresh install, and deploys an **IoT Smart Factory**: a simulated packaging line streaming telemetry over MQTT, a rules engine raising alerts, a time-series database and a live Grafana dashboard.
+
+| Service | Image | Port | Role |
+|---|---|---|---|
+| Mosquitto | `eclipse-mosquitto:2.0.22` | 1883 | MQTT broker. The published listener needs the stack login. An anonymous listener (1884) is reachable only on the compose network. |
+| Node-RED | `nodered/node-red:4.1.1` | 1880 | Line simulator, fault injection, alert rules and InfluxDB writer (core nodes only). Editor and API need the stack login. |
+| InfluxDB 2 | `influxdb:2.7.12` | 8086 | Telemetry and alerts (org `iot-factory`, bucket `telemetry`, 7-day retention) |
+| Grafana | `grafana/grafana-oss:11.6.0` | 3000 | Provisioned InfluxDB datasource and the **IoT Smart Factory** home dashboard |
+
+**The line:** `press-01` (hydraulic press), `cnc-02` (CNC mill) and `robot-03` (packing robot) publish temperature, vibration, rpm, power, parts produced, state and a health score every few seconds to `factory/<site>/<line>/<machine>/telemetry`.
+
+**Running the demo:**
+
+1. Open the `grafana_dashboard_url` capability (kiosk mode, anonymous view by default). All machines are green and RUNNING.
+2. Inject a fault, in any of these ways:
+   - Click a button on the **Fault Injection** tab in the Node-RED editor (`nodered_editor_url`).
+   - Call the REST API: `curl -u <user>:<password> -H 'Content-Type: application/json' -d '{"machine":"press-01","fault":"overheat"}' http://<host>:1880/api/fault`
+   - Publish over MQTT from a laptop: `mosquitto_pub -h <host> -u <user> -P <password> -t factory/<site>/<line>/cnc-02/cmd -m '{"fault":"bearing"}'`
+3. Watch the dashboard react:
+
+   | Fault | Machine | What happens |
+   |---|---|---|
+   | `overheat` | press-01 | Temperature ramps. WARNING at 85 °C (~20 s), CRITICAL at 95 °C (~40 s), then the press trips to FAULT and production stops |
+   | `bearing` | cnc-02 | Vibration climbs past 7 then 11 mm/s, health drops, the mill trips |
+   | `jam` | robot-03 | The robot STOPS at once, its parts counter freezes and power drops |
+   | `none` | any or `all` | Clears the fault. Machines restart and cool down, and "back to normal" events are logged |
+
+   Alerts are published to `factory/<site>/<line>/alerts`, stored in InfluxDB, listed in the **Recent alerts** table and drawn as red annotations on every chart. `GET /api/status` returns the live line state and active alerts as JSON.
+4. Set **Auto Chaos Mode** for an unattended booth: a random fault every 2–4 minutes, cleared after 2.
+
+### Secrets
+
+| Input | Secret type | Required | Purpose |
+|---|---|---|---|
+| `ssh_private_key` | SSH private key | Yes | Private key matching an `authorized_keys` entry on the remote host |
+| `stack_admin_credentials` | Basic Auth Credentials | Yes | One login for the Node-RED editor and API, Grafana admin, InfluxDB admin and the external MQTT user. The password must be at least 8 characters, and the username must not contain `:` |
+
+The credentials never appear in compose files or environment variables. They are written to `/opt/iot-factory/secrets` (a root-only directory) and mounted as compose secrets. Node-RED and Mosquitto store only hashes (bcrypt / PBKDF2).
+
+### Inputs
+
+**Remote host credentials** are the same as in [remote_host](#8-remote_host), except that `allow_update` is false.
+
+**Smart Factory Demo**
+
+| Input | Label | Type | Default | Upd | Notes |
+|---|---|---|---|---|---|
+| `stack_admin_credentials` | Stack Admin Credentials Secret | secret_key | – | ✗ | Schema `basic_auth_credentials` |
+| `factory_site` | Factory Site | string | `hopkinton` | ✗ | Lowercase letters, digits, hyphens. Used in topics, tags and the dashboard title |
+| `factory_line` | Production Line | string | `line-1` | ✗ | As above |
+| `publish_interval` | Telemetry Interval | integer | `2` | ✗ | Seconds, 1–60 |
+| `auto_chaos` | Auto Chaos Mode | boolean | `false` | ✗ | Random faults for unattended demos |
+| `grafana_anonymous_viewer` | Grafana Anonymous Viewer | boolean | `true` | ✗ | Read-only dashboards without a login (kiosk screens) |
+
+**Service Ports**: `mqtt_port` (`1883`), `nodered_port` (`1880`), `grafana_port` (`3000`), `influxdb_port` (`8086`), 1024–65535.
+
+**Ansible Settings**
+
+| Input | Label | Type | Default | Upd | Notes |
+|---|---|---|---|---|---|
+| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✓ | 0–3. Raise only to troubleshoot |
+| `ansible_timeout` | Ansible Timeout | integer | `30` | ✓ | SSH connection timeout, 10–600 s |
+| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✓ | One line per task in the deployment log. Failures are always logged |
+
+### Node template step-through
+
+Defined in `iot_factory/definitions.yaml`. All four are `dell.nodes.ansible.Executor` nodes connecting over direct SSH (`proxy_settings: disable: true`), chained with `depends_on`:
+
+1. **`preflight`** (`preflight.yaml`): read-only. It reads `/etc/os-release` with `raw` (no Python or facts needed) and rejects anything but Ubuntu 24.04. It then checks the architecture (x86_64/aarch64), RAM (≥ 2 GB), free disk (≥ 10 GB), that the four service ports are free, and outbound HTTPS to `download.docker.com` and Docker Hub.
+2. **`install_docker`** (`install_docker.yaml`): Docker CE and the compose plugin from Docker's apt repository. An existing Docker engine is left alone. A marker in `/etc/iot-factory` records whether this blueprint installed Docker. **Uninstall** (`stop` → `teardown_docker.yaml`) purges Docker, its repo, key and data **only if** the marker exists.
+3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run and hashes passwords on the host. Re-runs are idempotent: nothing changes or restarts unless an input or file did. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
+4. **`verify_demo`** (`verify_demo.yaml`): proves the demo works through the same paths a presenter uses. It checks that telemetry arrives on MQTT, that anonymous MQTT and unauthenticated API calls are refused, and that a jam injected through `/api/fault` raises an alert, which it then clears. It also checks that telemetry and alerts are in InfluxDB and that the dashboard is provisioned.
+
+**Logging:** each playbook prints one line per task and ends with a single `IOT-FACTORY [<node>] OK: …` summary. On failure, it ends with a single `IOT-FACTORY [<node>] FAILED at '<task>': <reason>. Hint: …` line. The ansible plugin always adds the full playbook output to a failed operation's error. The blueprint therefore uses Ansible's `default` callback (skipped tasks hidden, YAML results) rather than `json`, which would make the plugin report every task as an error. Tasks that handle secrets are `no_log`.
+
+**Uninstall** returns the host to its pre-install state: stack, volumes, images and, if this blueprint installed it, Docker. `ca-certificates`, `curl` and `python3-debian` stay installed.
+
+### Capabilities
+
+| Capability | Value |
+|---|---|
+| `grafana_dashboard_url` | `http://<remote_host>:<grafana_port>/d/iot-factory/iot-smart-factory?kiosk&refresh=5s` |
+| `nodered_editor_url` | `http://<remote_host>:<nodered_port>/` |
+| `fault_injection_api` | `http://<remote_host>:<nodered_port>/api/fault` |
+| `mqtt_endpoint` | `tcp://<remote_host>:<mqtt_port>` |
+| `mqtt_topic_root` | `factory/<site>/<line>` |
+| `influxdb_url` | `http://<remote_host>:<influxdb_port>` |
+| `stack_admin_credentials` | Name of the stack credentials secret |
+
+---
+
+## 10. Deploying and tearing down
 
 **Upload**
 
@@ -666,7 +772,7 @@ Defined in `remotehost/definitions.yaml`:
 **Deploy**
 
 1. Select the blueprint and click **Deploy**.
-2. In **Deploy On**, pick the target: a DDPC Endpoint, a simple_vm deployment (nginx_app), or nothing (remote_host).
+2. In **Deploy On**, pick the target: a DDPC Endpoint, a simple_vm deployment (nginx_app), or nothing (remote_host, iot_factory).
 3. Fill in the inputs. Required inputs have no default.
 4. Follow progress on the deployment's **Logs** tab and the Endpoint's **Virtual Machines** / **Containers** tabs. When the deployment finishes, the **Inputs/Capabilities** tab shows the connection details.
 
@@ -676,9 +782,10 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 
 ---
 
-## 10. Known issues and limitations
+## 11. Known issues and limitations
 
 - **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. compose_app's login wiring will work unchanged once the platform is fixed.
+- **iot_factory is tested only on Ubuntu 24.04 LTS** and refuses other systems at preflight. It needs internet access (Docker apt repo, Docker Hub); there is no air-gapped mode yet. Changing `stack_admin_credentials` after the first install updates Node-RED, Grafana's login file and MQTT, but not the InfluxDB or Grafana admin passwords already stored in their databases.
 - **Day-2 is only supported by compose_app.** The other entry points support install and uninstall; a deployment update on simple_vm only refreshes the VM IP.
 - **Shared SSH key:** all simple_vm / mqtt_nodered deployments share the `example_key` key pair. To give a copy its own key, change `key_name` in `vm/definitions.yaml`.
 - **Fixed interface name:** `get_vm_info.sh` reads the IP from `enp1s0`. Images with a different first-NIC name need the script updated.
@@ -686,6 +793,6 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 
 ---
 
-## 11. Changelog
+## 12. Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).

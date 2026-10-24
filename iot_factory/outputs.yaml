@@ -1,0 +1,39 @@
+capabilities:
+
+  grafana_dashboard_url:
+    description: Grafana IoT Smart Factory dashboard (kiosk mode)
+    value:
+      concat:
+        - 'http://'
+        - { get_input: remote_host }
+        - ':'
+        - { get_input: grafana_port }
+        - '/d/iot-factory/iot-smart-factory?kiosk&refresh=5s'
+
+  nodered_editor_url:
+    description: Node-RED editor (simulator, fault injection buttons and alert rules)
+    value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: nodered_port }, '/'] }
+
+  fault_injection_api:
+    description: >-
+      Fault injection REST endpoint (basic auth with the stack admin login). POST JSON
+      {"machine":"press-01|cnc-02|robot-03|all","fault":"overheat|bearing|jam|none"}
+    value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: nodered_port }, '/api/fault'] }
+
+  mqtt_endpoint:
+    description: MQTT broker endpoint (username and password from the stack admin login)
+    value: { concat: ['tcp://', { get_input: remote_host }, ':', { get_input: mqtt_port }] }
+
+  mqtt_topic_root:
+    description: >-
+      MQTT topic root. Telemetry at <root>/<machine>/telemetry, commands at
+      <root>/<machine>/cmd, alerts at <root>/alerts
+    value: { concat: ['factory/', { get_input: factory_site }, '/', { get_input: factory_line }] }
+
+  influxdb_url:
+    description: InfluxDB UI and API (org iot-factory, bucket telemetry)
+    value: { concat: ['http://', { get_input: remote_host }, ':', { get_input: influxdb_port }] }
+
+  stack_admin_credentials:
+    description: Name of the secret holding the stack admin username and password
+    value: { get_input: stack_admin_credentials }

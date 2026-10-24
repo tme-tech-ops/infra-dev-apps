@@ -1,0 +1,114 @@
+---
+# Read-only checks. Nothing on the host is changed. The OS check uses raw so it
+# works (and fails with a clear message) before Python or facts are involved.
+- name: IoT Smart Factory - preflight
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    supported_os_id: ubuntu
+    supported_os_version: "24.04"
+    min_memory_mb: 1900
+    min_disk_free_gb: 10
+    connectivity_urls:
+      - https://download.docker.com/linux/ubuntu/gpg
+      - https://registry-1.docker.io/v2/
+
+  tasks:
+    - name: Run preflight checks
+      block:
+        - name: Read /etc/os-release
+          ansible.builtin.raw: cat /etc/os-release
+          register: os_release
+          changed_when: false
+
+        - name: Check the operating system is Ubuntu 24.04
+          vars:
+            os_id: "{{ (os_release.stdout | regex_search('(?m)^ID=\"?([^\"\\r\\n]+)', '\\1') or ['unknown']) | first }}"
+            os_version: "{{ (os_release.stdout | regex_search('(?m)^VERSION_ID=\"?([^\"\\r\\n]+)', '\\1') or ['unknown']) | first }}"
+            os_pretty: "{{ (os_release.stdout | regex_search('(?m)^PRETTY_NAME=\"?([^\"\\r\\n]+)', '\\1') or ['an unidentified OS']) | first }}"
+          ansible.builtin.assert:
+            that:
+              - os_id == supported_os_id
+              - os_version == supported_os_version
+            fail_msg: >-
+              Unsupported operating system '{{ os_pretty }}'. This blueprint is
+              only tested on Ubuntu 24.04 LTS and refuses to modify other systems.
+            quiet: true
+
+        - name: Gather host facts
+          ansible.builtin.setup:
+            gather_subset: ["!all", "min", "hardware", "mounts"]
+
+        - name: Check CPU architecture
+          ansible.builtin.assert:
+            that: ansible_facts.architecture in ['x86_64', 'aarch64']
+            fail_msg: "Unsupported CPU architecture '{{ ansible_facts.architecture }}'. Needs x86_64 or aarch64."
+            quiet: true
+
+        - name: Check memory
+          ansible.builtin.assert:
+            that: ansible_facts.memtotal_mb | int >= min_memory_mb
+            fail_msg: "Only {{ ansible_facts.memtotal_mb }} MB RAM. The demo stack needs at least 2 GB."
+            quiet: true
+
+        - name: Check free disk space on /var
+          vars:
+            var_mount: >-
+              {{ ansible_facts.mounts | selectattr('mount', 'in', ['/var', '/'])
+                 | sort(attribute='mount', reverse=true) | first }}
+          ansible.builtin.assert:
+            that: (var_mount.size_available | int) >= (min_disk_free_gb * 1024 * 1024 * 1024)
+            fail_msg: >-
+              Only {{ (var_mount.size_available | int / 1024 / 1024 / 1024) | round(1) }} GB free on
+              {{ var_mount.mount }}. Docker images and data need at least {{ min_disk_free_gb }} GB.
+            quiet: true
+
+        - name: List listening TCP ports
+          ansible.builtin.command: ss -Htln
+          register: listening
+          changed_when: false
+
+        - name: Look for an existing demo install
+          ansible.builtin.stat:
+            path: /opt/iot-factory/compose.yaml
+          register: existing_stack
+
+        - name: Check the service ports are free (or already used by this demo)
+          vars:
+            busy_ports: >-
+              {{ listening.stdout_lines | map('split') | map(attribute=3)
+                 | map('regex_replace', '^.*:', '') | map('int') | list }}
+            conflicts: "{{ required_ports | map('int') | select('in', busy_ports) | list }}"
+          ansible.builtin.assert:
+            that: conflicts | length == 0 or existing_stack.stat.exists
+            fail_msg: >-
+              TCP port(s) {{ conflicts | join(', ') }} are already in use on the host.
+              Stop the service using them or choose different ports in the Service Ports inputs.
+            quiet: true
+
+        - name: Check internet access to the Docker apt repo and Docker Hub
+          ansible.builtin.uri:
+            url: "{{ item }}"
+            method: GET
+            status_code: [200, 401]
+            timeout: 15
+          loop: "{{ connectivity_urls }}"
+          loop_control:
+            label: "{{ item }}"
+
+        - name: Preflight passed
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [preflight] OK: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}
+              {{ ansible_facts.architecture }}, {{ ansible_facts.memtotal_mb }} MB RAM, ports
+              {{ required_ports | join(',') }} available, internet reachable.
+
+      rescue:
+        - name: Preflight failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [preflight] FAILED at '{{ ansible_failed_task.name }}':
+              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              No changes were made to the host.

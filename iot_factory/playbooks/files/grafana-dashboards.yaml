@@ -1,0 +1,12 @@
+# Managed by the infra-dev-apps IoT Smart Factory blueprint.
+apiVersion: 1
+providers:
+  - name: iot-factory
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

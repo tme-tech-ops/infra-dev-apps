@@ -1,0 +1,19 @@
+# Managed by the infra-dev-apps IoT Smart Factory blueprint.
+apiVersion: 1
+deleteDatasources:
+  - name: InfluxDB
+    orgId: 1
+datasources:
+  - name: InfluxDB
+    uid: influxdb-iot
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    editable: false
+    jsonData:
+      version: Flux
+      organization: {{ influx_org }}
+      defaultBucket: {{ influx_bucket }}
+    secureJsonData:
+      token: $__file{/run/secrets/influx_token}

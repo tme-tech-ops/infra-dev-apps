@@ -1,0 +1,50 @@
+---
+# Uninstall: stops the stack, removes its containers, volumes, networks and
+# images, then deletes /opt/iot-factory. Safe to re-run.
+- name: IoT Smart Factory - remove stack
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+
+  tasks:
+    - name: Remove the stack
+      block:
+        - name: Check for the stack compose file
+          ansible.builtin.stat:
+            path: "{{ stack_dir }}/compose.yaml"
+          register: compose_file
+
+        - name: Check Docker is available
+          ansible.builtin.command: docker compose version
+          register: docker_available
+          changed_when: false
+          failed_when: false
+
+        - name: Stop and remove containers, volumes, networks and images
+          when: compose_file.stat.exists and docker_available.rc == 0
+          ansible.builtin.command:
+            cmd: docker compose down --volumes --rmi all --remove-orphans --timeout 20
+            chdir: "{{ stack_dir }}"
+          changed_when: true
+
+        - name: Remove the stack directory
+          ansible.builtin.file:
+            path: "{{ stack_dir }}"
+            state: absent
+
+        - name: Stack removed
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [deploy_stack] UNINSTALL OK:
+              {{ 'containers, volumes, images and ' if compose_file.stat.exists and docker_available.rc == 0 else '' }}{{ stack_dir }} removed.
+
+      rescue:
+        - name: Stack removal failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [deploy_stack] UNINSTALL FAILED at '{{ ansible_failed_task.name }}':
+              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              Hint: run 'docker compose -f {{ stack_dir }}/compose.yaml down -v' on the host, then re-run uninstall.

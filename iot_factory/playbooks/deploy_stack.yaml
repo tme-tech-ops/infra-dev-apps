@@ -1,0 +1,267 @@
+---
+# Renders the stack under /opt/iot-factory and starts it with docker compose.
+# Re-runs are idempotent: the InfluxDB token is generated once, and passwords
+# are only re-hashed when the stack admin credentials change.
+- name: IoT Smart Factory - deploy stack
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    stack_dir: /opt/iot-factory
+    influx_org: iot-factory
+    influx_bucket: telemetry
+    images:
+      mosquitto: eclipse-mosquitto:2.0.22
+      nodered: nodered/node-red:4.1.1
+      influxdb: influxdb:2.7.12
+      grafana: grafana/grafana-oss:11.6.0
+
+  tasks:
+    - name: Deploy the stack
+      block:
+        - name: Validate the stack admin credentials
+          ansible.builtin.assert:
+            that:
+              - admin_username | length > 0
+              - "':' not in admin_username"
+              - admin_password | length >= 8
+            fail_msg: >-
+              The stack admin credentials secret is invalid: the username must be set and
+              must not contain ':', and the password must be at least 8 characters
+              (InfluxDB requirement).
+            quiet: true
+
+        - name: Check for an existing deployment of the stack
+          ansible.builtin.stat:
+            path: "{{ stack_dir }}/compose.yaml"
+          register: existing_compose
+
+        - name: Create the stack directories
+          ansible.builtin.file:
+            path: "{{ stack_dir }}/{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner | default('root') }}"
+            group: "{{ item.owner | default('root') }}"
+            mode: "{{ item.mode | default('0755') }}"
+          loop:
+            - { path: "" }
+            - { path: secrets, mode: "0700" }
+            - { path: mosquitto/config }
+            - { path: nodered, owner: "1000" }
+            - { path: grafana/provisioning/datasources }
+            - { path: grafana/provisioning/dashboards }
+            - { path: grafana/dashboards }
+          loop_control:
+            label: "{{ stack_dir }}/{{ item.path }}"
+
+        # Secret files are read inside the containers as non-root users, so they
+        # are world-readable; the 0700 secrets directory keeps other host users out.
+        - name: Generate the InfluxDB admin token (first run only)
+          ansible.builtin.shell:
+            cmd: umask 022 && openssl rand -hex 32 | tr -d '\n' > {{ stack_dir }}/secrets/influx_token
+            creates: "{{ stack_dir }}/secrets/influx_token"
+
+        - name: Fingerprint the stack admin credentials
+          ansible.builtin.set_fact:
+            creds_fingerprint: "{{ (admin_username ~ ':' ~ admin_password) | hash('sha256') }}"
+          no_log: true
+
+        - name: Read the fingerprint of the credentials currently deployed
+          ansible.builtin.slurp:
+            src: "{{ stack_dir }}/secrets/credentials.sha256"
+          register: deployed_fingerprint
+          failed_when: false
+
+        - name: Decide whether the credentials changed
+          ansible.builtin.set_fact:
+            creds_changed: >-
+              {{ deployed_fingerprint.content is not defined
+                 or (deployed_fingerprint.content | b64decode) != creds_fingerprint }}
+
+        - name: Write the admin username and password secrets
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/secrets/{{ item.name }}"
+            content: "{{ item.value }}"
+            mode: "0644"
+          loop:
+            - { name: admin_user, value: "{{ admin_username }}" }
+            - { name: admin_password, value: "{{ admin_password }}" }
+          no_log: true
+
+        - name: Pull the container images
+          ansible.builtin.command: docker pull --quiet {{ item }}
+          loop: "{{ images.values() | list }}"
+          register: pull
+          changed_when: false
+          retries: 3
+          delay: 15
+          until: pull.rc == 0
+
+        - name: Hash the Node-RED admin password (bcrypt)
+          when: creds_changed | bool
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - -e
+              - NR_PASSWORD
+              - --entrypoint
+              - node
+              - "{{ images.nodered }}"
+              - -e
+              - "process.stdout.write(require('bcryptjs').hashSync(process.env.NR_PASSWORD, 10))"
+          environment:
+            NR_PASSWORD: "{{ admin_password }}"
+          register: nodered_hash_result
+          changed_when: true
+          no_log: true
+
+        - name: Store the Node-RED admin password hash
+          when: creds_changed | bool
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/secrets/nodered_admin.hash"
+            content: "{{ nodered_hash_result.stdout }}"
+            mode: "0600"
+          no_log: true
+
+        - name: Read the Node-RED admin password hash
+          ansible.builtin.slurp:
+            src: "{{ stack_dir }}/secrets/nodered_admin.hash"
+          register: nodered_hash_file
+          no_log: true
+
+        - name: Write the MQTT password file (plain text, hashed in the next task)
+          when: creds_changed | bool
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/mosquitto/config/passwd"
+            content: "{{ admin_username }}:{{ admin_password }}\n"
+            owner: "1883"
+            group: "1883"
+            mode: "0600"
+          no_log: true
+
+        - name: Hash the MQTT password file
+          when: creds_changed | bool
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - -v
+              - "{{ stack_dir }}/mosquitto/config:/mosquitto/config"
+              - --entrypoint
+              - mosquitto_passwd
+              - "{{ images.mosquitto }}"
+              - -U
+              - /mosquitto/config/passwd
+          changed_when: true
+
+        - name: Set MQTT password file ownership
+          ansible.builtin.file:
+            path: "{{ stack_dir }}/mosquitto/config/passwd"
+            owner: "1883"
+            group: "1883"
+            mode: "0700"
+
+        - name: Render the configuration files
+          ansible.builtin.template:
+            src: "{{ item.src }}"
+            dest: "{{ stack_dir }}/{{ item.dest }}"
+            owner: "{{ item.owner | default('root') }}"
+            group: "{{ item.owner | default('root') }}"
+            mode: "{{ item.mode | default('0644') }}"
+          loop:
+            - { src: compose.yaml.j2, dest: compose.yaml }
+            - { src: mosquitto.conf.j2, dest: mosquitto/config/mosquitto.conf }
+            - { src: settings.js.j2, dest: nodered/settings.js, owner: "1000", mode: "0640" }
+            - { src: grafana-datasource.yaml.j2, dest: grafana/provisioning/datasources/influxdb.yaml }
+          loop_control:
+            label: "{{ item.dest }}"
+          vars:
+            nodered_admin_hash: "{{ nodered_hash_file.content | b64decode }}"
+          register: rendered
+
+        - name: Copy the Node-RED flows and Grafana dashboard provisioning
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "{{ stack_dir }}/{{ item.dest }}"
+            owner: "{{ item.owner | default('root') }}"
+            group: "{{ item.owner | default('root') }}"
+            mode: "0644"
+          loop:
+            - { src: flows.json, dest: nodered/flows.json, owner: "1000" }
+            - { src: grafana-dashboards.yaml, dest: grafana/provisioning/dashboards/iot-factory.yaml }
+          loop_control:
+            label: "{{ item.dest }}"
+          register: copied
+
+        - name: Install the Grafana dashboard
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/grafana/dashboards/iot-factory.json"
+            content: >-
+              {{ lookup('ansible.builtin.file', 'files/iot-factory-dashboard.json')
+                 | replace('__FACTORY_SITE__', factory_site)
+                 | replace('__FACTORY_LINE__', factory_line) }}
+            mode: "0644"
+
+        - name: Start the stack (waits for all health checks)
+          ansible.builtin.command:
+            cmd: docker compose up --detach --wait --wait-timeout 300 --remove-orphans
+            chdir: "{{ stack_dir }}"
+          register: compose_up
+          changed_when: "'Started' in compose_up.stderr or 'Recreated' in compose_up.stderr or 'Created' in compose_up.stderr"
+
+        - name: Restart services whose mounted configuration changed
+          vars:
+            changed_files: >-
+              {{ (rendered.results + copied.results) | selectattr('changed') | map(attribute='item.dest') | list }}
+            restart: >-
+              {{ (['mosquitto'] if (creds_changed | bool or 'mosquitto/config/mosquitto.conf' in changed_files) else [])
+                 + (['node-red'] if (changed_files | select('match', '^nodered/') | list | length > 0) else [])
+                 + (['grafana'] if (changed_files | select('match', '^grafana/') | list | length > 0) else []) }}
+          when: existing_compose.stat.exists and restart | length > 0
+          ansible.builtin.command:
+            cmd: docker compose restart {{ restart | join(' ') }}
+            chdir: "{{ stack_dir }}"
+          changed_when: true
+
+        - name: Wait for the stack to be healthy again
+          ansible.builtin.command:
+            cmd: docker compose up --detach --wait --wait-timeout 300
+            chdir: "{{ stack_dir }}"
+          changed_when: false
+
+        - name: Record the deployed credentials fingerprint
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/secrets/credentials.sha256"
+            content: "{{ creds_fingerprint }}"
+            mode: "0600"
+          no_log: true
+
+        - name: Stack deployed
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [deploy_stack] OK: mosquitto, influxdb, node-red and grafana are
+              running and healthy in {{ stack_dir }} (MQTT :{{ mqtt_port }}, Node-RED :{{ nodered_port }},
+              Grafana :{{ grafana_port }}, InfluxDB :{{ influxdb_port }}).
+
+      rescue:
+        - name: Collect container status for the error message
+          ansible.builtin.command:
+            cmd: docker compose ps --all --format '{{ "{{" }}.Service{{ "}}" }}={{ "{{" }}.Status{{ "}}" }}'
+            chdir: "{{ stack_dir }}"
+          register: compose_ps
+          changed_when: false
+          failed_when: false
+
+        - name: Stack deployment failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [deploy_stack] FAILED at '{{ ansible_failed_task.name }}':
+              {{ '(details hidden: task handles secrets)' if ansible_failed_result.censored is defined
+                 else ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              Containers: {{ compose_ps.stdout_lines | default([]) | join(', ') | default('none', true) }}.
+              Hint: image pulls need access to Docker Hub; for an unhealthy service run
+              'docker compose -f {{ stack_dir }}/compose.yaml logs <service>' on the host.

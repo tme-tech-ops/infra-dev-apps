@@ -1,0 +1,110 @@
+# Managed by the infra-dev-apps IoT Smart Factory blueprint. Changes are
+# overwritten on the next deployment run.
+name: iot-factory
+
+services:
+  mosquitto:
+    image: {{ images.mosquitto }}
+    restart: unless-stopped
+    ports:
+      - "{{ mqtt_port }}:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-p", "1884", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "5"]
+      interval: 10s
+      timeout: 8s
+      retries: 6
+
+  influxdb:
+    image: {{ images.influxdb }}
+    restart: unless-stopped
+    ports:
+      - "{{ influxdb_port }}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME_FILE: /run/secrets/admin_user
+      DOCKER_INFLUXDB_INIT_PASSWORD_FILE: /run/secrets/admin_password
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/influx_token
+      DOCKER_INFLUXDB_INIT_ORG: {{ influx_org }}
+      DOCKER_INFLUXDB_INIT_BUCKET: {{ influx_bucket }}
+      DOCKER_INFLUXDB_INIT_RETENTION: 7d
+      INFLUXD_REPORTING_DISABLED: "true"
+    secrets: [admin_user, admin_password, influx_token]
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  node-red:
+    image: {{ images.nodered }}
+    restart: unless-stopped
+    ports:
+      - "{{ nodered_port }}:1880"
+    environment:
+      TZ: Etc/UTC
+      FACTORY_SITE: "{{ factory_site }}"
+      FACTORY_LINE: "{{ factory_line }}"
+      PUBLISH_INTERVAL: "{{ publish_interval }}"
+      AUTO_CHAOS: "{{ auto_chaos | bool | lower }}"
+      INFLUX_ORG: {{ influx_org }}
+      INFLUX_BUCKET: {{ influx_bucket }}
+    secrets: [influx_token]
+    volumes:
+      - ./nodered:/data
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:1880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  grafana:
+    image: {{ images.grafana }}
+    restart: unless-stopped
+    ports:
+      - "{{ grafana_port }}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER__FILE: /run/secrets/admin_user
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/admin_password
+      GF_AUTH_ANONYMOUS_ENABLED: "{{ grafana_anonymous_viewer | bool | lower }}"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/iot-factory.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: dark
+    secrets: [admin_user, admin_password, influx_token]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+secrets:
+  admin_user:
+    file: ./secrets/admin_user
+  admin_password:
+    file: ./secrets/admin_password
+  influx_token:
+    file: ./secrets/influx_token
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:

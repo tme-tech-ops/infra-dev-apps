@@ -1,0 +1,17 @@
+# Managed by the infra-dev-apps IoT Smart Factory blueprint.
+per_listener_settings true
+persistence false
+log_dest stdout
+log_type error
+log_type warning
+log_type notice
+
+# External listener (published on host port {{ mqtt_port }}): login required.
+listener 1883
+allow_anonymous false
+password_file /mosquitto/config/passwd
+
+# Internal listener: only reachable on the compose network (Node-RED, health
+# checks). Not published on the host.
+listener 1884
+allow_anonymous true

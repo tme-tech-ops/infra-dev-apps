@@ -1,0 +1,126 @@
+---
+# Docker CE and the compose plugin from Docker's apt repository. If Docker is
+# already installed it is left as is. A marker file records whether this
+# blueprint installed it, so teardown_docker.yaml only removes what we added.
+- name: IoT Smart Factory - install Docker
+  hosts: all
+  gather_facts: true
+  gather_subset: ["!all", "min"]
+  become: true
+
+  vars:
+    marker_dir: /etc/iot-factory
+    installed_marker: /etc/iot-factory/docker-installed-by-blueprint
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+
+  tasks:
+    - name: Install Docker
+      block:
+        - name: Check for an existing Docker engine
+          ansible.builtin.command: docker version --format '{{ "{{" }}.Server.Version{{ "}}" }}'
+          register: existing_docker
+          changed_when: false
+          failed_when: false
+
+        - name: Create the marker directory
+          ansible.builtin.file:
+            path: "{{ marker_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Check whether a previous run of this blueprint installed Docker
+          ansible.builtin.stat:
+            path: "{{ installed_marker }}"
+          register: marker
+
+        - name: Install Docker CE from the official repository
+          when: existing_docker.rc != 0 or marker.stat.exists
+          block:
+            - name: Install apt prerequisites
+              ansible.builtin.apt:
+                name: [ca-certificates, curl, python3-debian]
+                state: present
+                update_cache: true
+                cache_valid_time: 3600
+              register: apt_prereq
+              retries: 3
+              delay: 10
+              until: apt_prereq is succeeded
+
+            - name: Create the apt keyring directory
+              ansible.builtin.file:
+                path: /etc/apt/keyrings
+                state: directory
+                mode: "0755"
+
+            - name: Download the Docker apt signing key
+              ansible.builtin.get_url:
+                url: https://download.docker.com/linux/ubuntu/gpg
+                dest: /etc/apt/keyrings/docker.asc
+                mode: "0644"
+                timeout: 30
+
+            - name: Add the Docker apt repository
+              ansible.builtin.deb822_repository:
+                name: docker
+                types: deb
+                uris: https://download.docker.com/linux/ubuntu
+                suites: "{{ ansible_facts.distribution_release }}"
+                components: stable
+                architectures: "{{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }}"
+                signed_by: /etc/apt/keyrings/docker.asc
+
+            - name: Install Docker packages
+              ansible.builtin.apt:
+                name: "{{ docker_packages }}"
+                state: present
+                update_cache: true
+              register: apt_docker
+              retries: 3
+              delay: 10
+              until: apt_docker is succeeded
+
+            - name: Record that this blueprint installed Docker
+              ansible.builtin.copy:
+                dest: "{{ installed_marker }}"
+                content: "Installed by the infra-dev-apps IoT Smart Factory blueprint. Removed on uninstall.\n"
+                mode: "0644"
+              when: existing_docker.rc != 0
+
+        - name: Enable and start Docker
+          ansible.builtin.systemd_service:
+            name: docker
+            state: started
+            enabled: true
+
+        - name: Check Docker and the compose plugin work
+          ansible.builtin.command: docker compose version --short
+          register: compose_version
+          changed_when: false
+
+        - name: Read the Docker engine version
+          ansible.builtin.command: docker version --format '{{ "{{" }}.Server.Version{{ "}}" }}'
+          register: docker_version
+          changed_when: false
+
+        - name: Docker ready
+          ansible.builtin.debug:
+            msg: >-
+              IOT-FACTORY [install_docker] OK: Docker {{ docker_version.stdout }}, compose
+              {{ compose_version.stdout }}
+              ({{ 'pre-existing, left untouched on uninstall' if existing_docker.rc == 0 and not marker.stat.exists
+                  else 'installed by this blueprint, removed on uninstall' }}).
+
+      rescue:
+        - name: Docker install failed
+          ansible.builtin.fail:
+            msg: >-
+              IOT-FACTORY [install_docker] FAILED at '{{ ansible_failed_task.name }}':
+              {{ ansible_failed_result.msg | default(ansible_failed_result.stderr | default('see task output above')) }}
+              Hint: check that the host can reach download.docker.com and the Ubuntu
+              apt mirrors, and that no other apt process holds the dpkg lock.

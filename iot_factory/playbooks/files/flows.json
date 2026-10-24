@@ -1,0 +1,539 @@
+[
+    {
+        "id": "tab_simulator",
+        "type": "tab",
+        "label": "Line Simulator",
+        "disabled": false,
+        "info": "Simulated packaging line publishing machine telemetry over MQTT.",
+        "env": []
+    },
+    {
+        "id": "tab_faults",
+        "type": "tab",
+        "label": "Fault Injection",
+        "disabled": false,
+        "info": "Inject machine faults from buttons, MQTT commands or the REST API.",
+        "env": []
+    },
+    {
+        "id": "tab_analytics",
+        "type": "tab",
+        "label": "Analytics & Alerts",
+        "disabled": false,
+        "info": "Rules engine (alerts, health) and InfluxDB writer.",
+        "env": []
+    },
+    {
+        "id": "mqtt_internal",
+        "type": "mqtt-broker",
+        "name": "Mosquitto (internal listener)",
+        "broker": "mosquitto",
+        "port": "1884",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "c_about",
+        "type": "comment",
+        "z": "tab_simulator",
+        "name": "About this demo",
+        "info": "IoT Smart Factory demo (infra-dev-apps / DAP).\n\nA packaging line with three machines: press-01 (hydraulic press),\ncnc-02 (CNC mill) and robot-03 (packing robot).\n\n- Line Simulator: publishes telemetry to factory/<site>/<line>/<machine>/telemetry\n- Fault Injection: click the buttons, POST /api/fault, or publish to\n  factory/<site>/<line>/<machine>/cmd with {\"fault\":\"overheat|bearing|jam|none\"}\n- Analytics: rules engine raises alerts on factory/<site>/<line>/alerts and\n  writes telemetry and alerts to InfluxDB (bucket telemetry)\n\nOpen Grafana (home dashboard \"IoT Smart Factory\") and inject a fault.\n",
+        "x": 150,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "i_tick",
+        "type": "inject",
+        "z": "tab_simulator",
+        "name": "tick 1s",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 120,
+        "wires": [
+            [
+                "f_sim"
+            ]
+        ]
+    },
+    {
+        "id": "f_sim",
+        "type": "function",
+        "z": "tab_simulator",
+        "name": "Simulate machines",
+        "func": "// Packaging-line simulator. Ticks every second, publishes every PUBLISH_INTERVAL s.\nconst site = env.get('FACTORY_SITE') || 'demo';\nconst line = env.get('FACTORY_LINE') || 'line-1';\nconst interval = Math.max(1, parseInt(env.get('PUBLISH_INTERVAL') || '2', 10));\nconst now = Date.now();\nif (now - (context.get('last') || 0) < interval * 1000 - 100) {\n    return null;\n}\ncontext.set('last', now);\n\n// Unattended booth mode: a random fault every 2-4 minutes, cleared after 2.\nif (String(env.get('AUTO_CHAOS')).toLowerCase() === 'true') {\n    const chaos = context.get('chaos') || { next: now + 60000, clearAt: 0 };\n    if (chaos.clearAt && now >= chaos.clearAt) {\n        global.set('faults', {});\n        chaos.clearAt = 0;\n        chaos.next = now + (120 + Math.random() * 120) * 1000;\n        node.log('auto-chaos: faults cleared');\n    } else if (!chaos.clearAt && now >= chaos.next) {\n        const options = [['press-01', 'overheat'], ['cnc-02', 'bearing'], ['robot-03', 'jam']];\n        const pick = options[Math.floor(Math.random() * options.length)];\n        global.set('faults', { [pick[0]]: pick[1] });\n        chaos.clearAt = now + 120000;\n        node.log(`auto-chaos: ${pick[1]} on ${pick[0]}`);\n    }\n    context.set('chaos', chaos);\n}\n\nconst MACHINES = global.get('machineDefs');\nconst STATE_CODE = { RUNNING: 0, DEGRADED: 1, STOPPED: 2, FAULT: 3 };\nconst faults = global.get('faults') || {};\nconst machines = global.get('machines') || {};\nconst approach = (cur, target, k) => cur + (target - cur) * k;\nconst noise = (amp) => (Math.random() - 0.5) * amp;\nconst round = (v, d) => Math.round(v * 10 ** d) / 10 ** d;\nconst msgs = [];\n\nfor (const [id, d] of Object.entries(MACHINES)) {\n    const m = machines[id] || {\n        temperature: d.temp, vibration: d.vib, rpm: d.rpm, power_kw: d.power,\n        parts: 0, state: 'RUNNING'\n    };\n    const fault = faults[id] || 'none';\n\n    // State machine. A trip (FAULT) latches until the fault is cleared.\n    if (fault === 'none') {\n        m.state = 'RUNNING';\n    } else if (fault === 'jam') {\n        m.state = 'STOPPED';\n    } else if (m.state === 'FAULT' || m.temperature >= 95 || m.vibration >= 11) {\n        m.state = 'FAULT';\n    } else {\n        m.state = 'DEGRADED';\n    }\n\n    let tT = d.temp, vT = d.vib, rT = d.rpm, pT = d.power, rate = d.rate;\n    if (fault === 'overheat') { tT = d.temp + 50; pT = d.power * 1.3; }\n    if (fault === 'bearing') { vT = d.vib + 12; tT = d.temp + 9; }\n    if (m.state === 'STOPPED' || m.state === 'FAULT') { rT = 0; pT = d.power * 0.12; rate = 0; }\n\n    // Slow ramps on the faulted signal so the audience can watch it climb.\n    m.temperature = approach(m.temperature, tT, fault === 'overheat' ? 0.05 : 0.12) + noise(0.6);\n    m.vibration = Math.max(0, approach(m.vibration, vT, fault === 'bearing' ? 0.05 : 0.2) + noise(0.3));\n    m.rpm = Math.max(0, approach(m.rpm, rT, 0.4) + (rT ? noise(rT * 0.01) : 0));\n    m.power_kw = Math.max(0, approach(m.power_kw, pT, 0.3) + noise(pT * 0.04));\n    m.parts += rate * (interval / 60) * (0.9 + Math.random() * 0.2);\n\n    let health = 100;\n    health -= Math.max(0, m.temperature - (d.temp + 8)) * 1.6;\n    health -= Math.max(0, m.vibration - (d.vib + 1.5)) * 6;\n    if (m.state === 'STOPPED') health = Math.min(health, 25);\n    if (m.state === 'FAULT') health = Math.min(health, 5);\n\n    machines[id] = m;\n    msgs.push({\n        topic: `factory/${site}/${line}/${id}/telemetry`,\n        payload: {\n            ts: now, site, line, machine: id, type: d.type,\n            state: m.state, state_code: STATE_CODE[m.state], fault,\n            temperature: round(m.temperature, 1),\n            vibration: round(m.vibration, 2),\n            rpm: Math.round(m.rpm),\n            power_kw: round(m.power_kw, 2),\n            parts_total: Math.floor(m.parts),\n            health: Math.round(Math.max(0, Math.min(100, health)))\n        }\n    });\n}\nglobal.set('machines', machines);\n\nconst bad = msgs.filter((x) => x.payload.state !== 'RUNNING');\nnode.status(bad.length\n    ? { fill: 'red', shape: 'dot', text: bad.map((x) => `${x.payload.machine} ${x.payload.state}`).join(', ') }\n    : { fill: 'green', shape: 'dot', text: `3 machines RUNNING, every ${interval}s` });\nreturn [msgs];\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "// Machine models: nominal temperature (C), vibration (mm/s), rpm, power (kW)\n// and production rate (parts per minute).\nglobal.set('machineDefs', {\n    'press-01': { type: 'hydraulic_press', temp: 62, vib: 2.2, rpm: 30, power: 18, rate: 12 },\n    'cnc-02': { type: 'cnc_mill', temp: 48, vib: 3.0, rpm: 9000, power: 11, rate: 4 },\n    'robot-03': { type: 'packing_robot', temp: 41, vib: 1.4, rpm: 1500, power: 4.5, rate: 20 }\n});\nif (!global.get('faults')) global.set('faults', {});\n",
+        "finalize": "",
+        "libs": [],
+        "x": 340,
+        "y": 120,
+        "wires": [
+            [
+                "o_telemetry"
+            ]
+        ]
+    },
+    {
+        "id": "o_telemetry",
+        "type": "mqtt out",
+        "z": "tab_simulator",
+        "name": "publish telemetry",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt_internal",
+        "x": 570,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "c_faults",
+        "type": "comment",
+        "z": "tab_faults",
+        "name": "Click a button, then watch Grafana",
+        "info": "",
+        "x": 170,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "i_overheat",
+        "type": "inject",
+        "z": "tab_faults",
+        "name": "Overheat press-01",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "{\"machine\":\"press-01\",\"fault\":\"overheat\"}",
+        "payloadType": "json",
+        "x": 160,
+        "y": 100,
+        "wires": [
+            [
+                "f_apply"
+            ]
+        ]
+    },
+    {
+        "id": "i_bearing",
+        "type": "inject",
+        "z": "tab_faults",
+        "name": "Bearing wear cnc-02",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "{\"machine\":\"cnc-02\",\"fault\":\"bearing\"}",
+        "payloadType": "json",
+        "x": 170,
+        "y": 140,
+        "wires": [
+            [
+                "f_apply"
+            ]
+        ]
+    },
+    {
+        "id": "i_jam",
+        "type": "inject",
+        "z": "tab_faults",
+        "name": "Jam robot-03",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "{\"machine\":\"robot-03\",\"fault\":\"jam\"}",
+        "payloadType": "json",
+        "x": 140,
+        "y": 180,
+        "wires": [
+            [
+                "f_apply"
+            ]
+        ]
+    },
+    {
+        "id": "i_clear",
+        "type": "inject",
+        "z": "tab_faults",
+        "name": "Clear all faults",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "{\"machine\":\"all\",\"fault\":\"none\"}",
+        "payloadType": "json",
+        "x": 150,
+        "y": 220,
+        "wires": [
+            [
+                "f_apply"
+            ]
+        ]
+    },
+    {
+        "id": "m_cmd",
+        "type": "mqtt in",
+        "z": "tab_faults",
+        "name": "MQTT commands",
+        "topic": "factory/+/+/+/cmd",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt_internal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 280,
+        "wires": [
+            [
+                "f_cmd"
+            ]
+        ]
+    },
+    {
+        "id": "f_cmd",
+        "type": "function",
+        "z": "tab_faults",
+        "name": "Command to fault",
+        "func": "// factory/<site>/<line>/<machine>/cmd  payload {\"fault\":\"overheat\"} or \"overheat\"\nconst machine = msg.topic.split('/')[3];\nmsg.payload = (msg.payload && typeof msg.payload === 'object')\n    ? Object.assign({ machine }, msg.payload)\n    : { machine, fault: String(msg.payload) };\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 280,
+        "wires": [
+            [
+                "f_apply"
+            ]
+        ]
+    },
+    {
+        "id": "h_fault",
+        "type": "http in",
+        "z": "tab_faults",
+        "name": "POST /api/fault",
+        "url": "/api/fault",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 150,
+        "y": 340,
+        "wires": [
+            [
+                "f_apply"
+            ]
+        ]
+    },
+    {
+        "id": "f_apply",
+        "type": "function",
+        "z": "tab_faults",
+        "name": "Apply fault",
+        "func": "// Accepts {machine, fault} from the inject buttons, MQTT commands and the REST API.\nconst FAULTS = ['overheat', 'bearing', 'jam', 'none'];\nconst MACHINES = Object.keys(global.get('machineDefs') || {});\nlet p = msg.payload;\nif (typeof p === 'string') {\n    try { p = JSON.parse(p); } catch (e) { p = { fault: p }; }\n}\np = p || {};\nconst machine = String(p.machine || msg.machine || 'all');\nconst fault = String(p.fault || 'none').toLowerCase();\nconst reply = (code, body) => {\n    msg.statusCode = code;\n    msg.payload = body;\n    return msg.res ? [msg, null] : [null, msg];\n};\nif (!FAULTS.includes(fault) || !(machine === 'all' || MACHINES.includes(machine))) {\n    node.warn(`rejected fault command machine=${machine} fault=${fault}`);\n    return reply(400, {\n        ok: false,\n        error: `machine must be one of ${MACHINES.join(', ')} or all; fault must be one of ${FAULTS.join(', ')}`\n    });\n}\nconst faults = global.get('faults') || {};\nfor (const m of (machine === 'all' ? MACHINES : [machine])) {\n    if (fault === 'none') delete faults[m]; else faults[m] = fault;\n}\nglobal.set('faults', faults);\nconst active = Object.entries(faults).map(([m, f]) => `${m}:${f}`);\nnode.status(active.length\n    ? { fill: 'red', shape: 'ring', text: active.join(', ') }\n    : { fill: 'green', shape: 'dot', text: 'no faults' });\nnode.log(`fault command: ${machine} -> ${fault}`);\nreturn reply(200, { ok: true, faults });\n",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 220,
+        "wires": [
+            [
+                "r_fault"
+            ],
+            [
+                "d_fault"
+            ]
+        ]
+    },
+    {
+        "id": "r_fault",
+        "type": "http response",
+        "z": "tab_faults",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 790,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "d_fault",
+        "type": "debug",
+        "z": "tab_faults",
+        "name": "fault changes",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 800,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "h_status",
+        "type": "http in",
+        "z": "tab_faults",
+        "name": "GET /api/status",
+        "url": "/api/status",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 150,
+        "y": 420,
+        "wires": [
+            [
+                "f_status"
+            ]
+        ]
+    },
+    {
+        "id": "f_status",
+        "type": "function",
+        "z": "tab_faults",
+        "name": "Line status",
+        "func": "msg.payload = {\n    site: env.get('FACTORY_SITE'),\n    line: env.get('FACTORY_LINE'),\n    faults: global.get('faults') || {},\n    machines: global.get('machines') || {},\n    active_alerts: Object.values(global.get('activeAlerts') || {}),\n    recent_alerts: global.get('recentAlerts') || []\n};\nmsg.headers = { 'Content-Type': 'application/json' };\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 420,
+        "wires": [
+            [
+                "r_status"
+            ]
+        ]
+    },
+    {
+        "id": "r_status",
+        "type": "http response",
+        "z": "tab_faults",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 550,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "m_telemetry",
+        "type": "mqtt in",
+        "z": "tab_analytics",
+        "name": "machine telemetry",
+        "topic": "factory/+/+/+/telemetry",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt_internal",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "f_rules"
+            ]
+        ]
+    },
+    {
+        "id": "f_rules",
+        "type": "function",
+        "z": "tab_analytics",
+        "name": "Rules engine",
+        "func": "// Edge-triggered alert rules. Emits an alert when a rule's severity changes,\n// and a 'resolved' event when it returns to normal.\nconst t = msg.payload;\nif (!t || !t.machine) return null;\nconst RULES = [\n    { rule: 'temperature', value: t.temperature, unit: 'C', warn: 85, crit: 95 },\n    { rule: 'vibration', value: t.vibration, unit: 'mm/s', warn: 7, crit: 11 }\n];\nconst levels = context.get('levels') || {};\nconst active = global.get('activeAlerts') || {};\nconst recent = global.get('recentAlerts') || [];\nconst out = [];\n\nfunction emit(rule, severity, value, message, status) {\n    const key = `${t.machine}/${rule}`;\n    const alert = { ts: t.ts, site: t.site, line: t.line, machine: t.machine, rule, severity, value, message, status };\n    if (status === 'active') active[key] = alert; else delete active[key];\n    recent.unshift(alert);\n    out.push(alert);\n}\n\nfor (const r of RULES) {\n    const level = r.value >= r.crit ? 'critical' : r.value >= r.warn ? 'warning' : 'ok';\n    const key = `${t.machine}/${r.rule}`;\n    const prev = levels[key] || 'ok';\n    if (level !== prev) {\n        if (level === 'ok') {\n            emit(r.rule, 'info', r.value, `${t.machine} ${r.rule} back to normal (${r.value} ${r.unit})`, 'resolved');\n        } else {\n            const limit = level === 'critical' ? r.crit : r.warn;\n            emit(r.rule, level, r.value, `${t.machine} ${r.rule} ${r.value} ${r.unit} above ${level} limit ${limit} ${r.unit}`, 'active');\n        }\n        levels[key] = level;\n    }\n}\n\nconst sKey = `${t.machine}/state`;\nconst prevState = levels[sKey] || 'RUNNING';\nconst stateNorm = t.state === 'DEGRADED' ? 'RUNNING' : t.state;\nif (stateNorm !== prevState) {\n    if (stateNorm === 'RUNNING') {\n        emit('state', 'info', t.state_code, `${t.machine} running again`, 'resolved');\n    } else {\n        const sev = t.state === 'FAULT' ? 'critical' : 'warning';\n        const why = t.state === 'FAULT' ? 'tripped on a safety limit' : `stopped (${t.fault})`;\n        emit('state', sev, t.state_code, `${t.machine} ${why}`, 'active');\n    }\n    levels[sKey] = stateNorm;\n}\n\ncontext.set('levels', levels);\nglobal.set('activeAlerts', active);\nglobal.set('recentAlerts', recent.slice(0, 50));\n\nconst site = t.site, line = t.line;\nconst alertMsgs = out.map((a) => ({ topic: `factory/${site}/${line}/alerts`, payload: a }));\nconst toStore = [{ kind: 'telemetry', payload: t }].concat(out.map((a) => ({ kind: 'alert', payload: a })));\nif (out.length) {\n    const crit = out.filter((a) => a.severity === 'critical').length;\n    node.status({ fill: crit ? 'red' : 'yellow', shape: 'dot', text: out[out.length - 1].message });\n}\nreturn [alertMsgs, toStore];\n",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 100,
+        "wires": [
+            [
+                "o_alerts",
+                "d_alerts"
+            ],
+            [
+                "f_lp"
+            ]
+        ]
+    },
+    {
+        "id": "o_alerts",
+        "type": "mqtt out",
+        "z": "tab_analytics",
+        "name": "publish alerts",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt_internal",
+        "x": 580,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "d_alerts",
+        "type": "debug",
+        "z": "tab_analytics",
+        "name": "alerts",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 560,
+        "y": 20,
+        "wires": []
+    },
+    {
+        "id": "f_lp",
+        "type": "function",
+        "z": "tab_analytics",
+        "name": "To line protocol",
+        "func": "// Telemetry and alerts -> InfluxDB 2 line protocol (HTTP write API).\nconst tag = (s) => String(s).replace(/[ ,=]/g, '\\\\$&');\nconst str = (s) => '\"' + String(s).replace(/[\"\\\\]/g, '\\\\$&') + '\"';\nconst p = msg.payload;\nlet lp;\nif (msg.kind === 'alert') {\n    lp = `alerts,site=${tag(p.site)},line=${tag(p.line)},machine=${tag(p.machine)},rule=${tag(p.rule)},severity=${tag(p.severity)}`\n        + ` message=${str(p.message)},status=${str(p.status)},value=${Number(p.value) || 0},active=${p.status === 'active' ? 1 : 0}i ${p.ts}`;\n} else {\n    lp = `machine_telemetry,site=${tag(p.site)},line=${tag(p.line)},machine=${tag(p.machine)},type=${tag(p.type)}`\n        + ` temperature=${p.temperature},vibration=${p.vibration},rpm=${p.rpm}i,power_kw=${p.power_kw}`\n        + `,parts_total=${p.parts_total}i,health=${p.health}i,state_code=${p.state_code}i`\n        + `,state=${str(p.state)},fault=${str(p.fault)} ${p.ts}`;\n}\nconst org = encodeURIComponent(env.get('INFLUX_ORG') || 'iot-factory');\nconst bucket = encodeURIComponent(env.get('INFLUX_BUCKET') || 'telemetry');\nmsg.method = 'POST';\nmsg.url = `http://influxdb:8086/api/v2/write?org=${org}&bucket=${bucket}&precision=ms`;\nmsg.headers = {\n    Authorization: 'Token ' + global.get('influxToken'),\n    'Content-Type': 'text/plain; charset=utf-8'\n};\nmsg.payload = lp;\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 570,
+        "y": 140,
+        "wires": [
+            [
+                "h_influx"
+            ]
+        ]
+    },
+    {
+        "id": "h_influx",
+        "type": "http request",
+        "z": "tab_analytics",
+        "name": "InfluxDB write",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": true,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 780,
+        "y": 140,
+        "wires": [
+            [
+                "f_check"
+            ]
+        ]
+    },
+    {
+        "id": "f_check",
+        "type": "function",
+        "z": "tab_analytics",
+        "name": "Check write",
+        "func": "// Count writes; report failures at most once a minute so the log stays readable.\nconst ok = msg.statusCode >= 200 && msg.statusCode < 300;\nconst s = context.get('stats') || { ok: 0, failed: 0, lastError: 0 };\nif (ok) {\n    s.ok += 1;\n} else {\n    s.failed += 1;\n    if (Date.now() - s.lastError > 60000) {\n        s.lastError = Date.now();\n        node.error(`InfluxDB write failed (HTTP ${msg.statusCode || 'no response'}): ${String(msg.payload).slice(0, 200)}`, msg);\n    }\n}\ncontext.set('stats', s);\nnode.status({ fill: s.failed ? 'red' : 'green', shape: 'dot', text: `written ${s.ok}, failed ${s.failed}` });\nreturn null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 970,
+        "y": 140,
+        "wires": [
+            []
+        ]
+    }
+]
