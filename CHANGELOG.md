@@ -8,6 +8,25 @@ Breaking: entry file names and catalog labels changed. Re-upload the
 blueprint and select the new entry file. Existing deployments are not
 affected.
 
+- Changed (breaking): `container_based` now deploys the **Site IT Toolkit**
+  instead of Node-RED / InfluxDB / Grafana: a Gatus status page that checks
+  the site uplink, its TLS certificate, the DNS resolver, a named key service
+  and the toolkit itself, ntfy push alerts (Gatus alerts after 3 failed
+  checks and on recovery), an OpenSpeedTest LAN speed test and the IT-Tools
+  toolbox. The whole stack is configured in
+  `container_based/compose/site_it_toolkit.yaml` (replaces
+  `container_compose.yaml`); the Gatus configuration is inline and rendered
+  into a named volume by an `itk-config` service, because DDPC rejects bind
+  mounts. `itk-config` also fills in the compose DNS server and the alerts
+  service IP, because the scratch-based Gatus image gets no
+  `/etc/resolv.conf` on DDPC. All images are pinned public images with resource limits. The
+  per-container name/image inputs are replaced by site, health-check, port
+  and image-registry inputs, and `container_based/outputs.yaml` is now
+  `capabilities.yaml` (status page, alerts, speed test and toolbox URLs).
+- Added (container_based): optional registry login (`registry_login_enabled`,
+  `registry_url`, `registry_credentials_secret`, `registry_tls_verify`), the
+  same `RegistryLogin` wiring as compose_app. On EdgeOS 4.3 the login reports
+  success but pulls stay anonymous (known platform issue).
 - Added: `iot_factory_remote_host_example.yaml` (`iot_factory/`), an IoT Smart
   Factory demo for any SSH-reachable Ubuntu 24.04 host. Ansible installs Docker
   CE from the official repo, then Mosquitto, Node-RED (line simulator, fault

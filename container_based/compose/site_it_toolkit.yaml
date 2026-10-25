@@ -1,0 +1,229 @@
+# Site IT Toolkit: a status page with alerting, a LAN speed test and an IT
+# toolbox for a branch or edge site, run directly on a DDPC Endpoint.
+#
+# Everything is configured here. The blueprint only supplies the variable
+# values (site name, health-check targets, ports, image registry and the
+# Endpoint IP), which the edge-plugin substitutes before the definition is
+# sent to the Endpoint.
+#
+# DDPC compose rules that shape this file:
+# - No bind mounts or configs, so the Gatus configuration is kept inline below
+#   and written to a shared named volume by the itk-config service.
+# - Services reach each other by service name, but only within this compose.
+#   The containers are named after their services on the Endpoint, so the
+#   itk- prefix keeps them recognizable next to other stacks. Containers
+#   cannot reach the Endpoint's own published ports, so the browser links use
+#   ENDPOINT_IP and the health checks use service names.
+# - Gatus is a scratch image and gets no /etc/resolv.conf on DDPC, so it
+#   cannot resolve names by itself. itk-config fills in __NAMESERVER__ (the
+#   compose DNS server, for the checks' dns-resolver) and __ALERTS_IP__ (for
+#   alert delivery, which has no resolver setting) and keeps them current.
+# - Ports must be quoted "HOST:CONTAINER" strings and images must include
+#   the registry. Do not use a dollar sign except in the variables above:
+#   the edge-plugin substitutes it and DDPC does not unescape a double one.
+
+services:
+
+  # Renders GATUS_CONFIG into the gatus_config volume every 30 s, filling in
+  # __NAMESERVER__ and __ALERTS_IP__, and rewrites the file only when it
+  # changes. Gatus reloads the file when it changes.
+  itk-config:
+    image: ${IMAGE_REGISTRY}/library/busybox:1.37.0
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          (grep -m1 '^nameserver' /etc/resolv.conf || echo 'nameserver 127.0.0.1') | sed 's#^nameserver *\([^ ]*\).*#s/__NAMESERVER__/\1/g#' > /tmp/render.sed
+          nslookup itk-alerts. 2>/dev/null | grep -A1 '^Name:' | grep -m1 '^Address' | sed 's#^Address:* *\([0-9.]*\).*#s/__ALERTS_IP__/\1/g#' >> /tmp/render.sed
+          printenv GATUS_CONFIG | sed -f /tmp/render.sed > /tmp/config.yaml
+          if ! grep -q '__[A-Z_]*__' /tmp/config.yaml && ! cmp -s /tmp/config.yaml /config/site-it-toolkit.yaml; then
+            cp /tmp/config.yaml /config/site-it-toolkit.yaml
+          fi
+          sleep 30
+        done
+    volumes:
+      - gatus_config:/config
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 32M
+    environment:
+      GATUS_CONFIG: |
+        storage:
+          type: sqlite
+          path: /data/gatus.db
+        ui:
+          title: "${SITE_NAME} IT Status"
+          header: "${SITE_NAME} IT Status"
+          description: "Health of the IT services at ${SITE_NAME}"
+          default-sort-by: group
+          buttons:
+            - name: "Alerts"
+              link: "http://${ENDPOINT_IP}:${ALERTS_PORT}/${ALERT_TOPIC}"
+            - name: "Speed Test"
+              link: "http://${ENDPOINT_IP}:${SPEEDTEST_PORT}"
+            - name: "IT Tools"
+              link: "http://${ENDPOINT_IP}:${TOOLBOX_PORT}"
+        alerting:
+          ntfy:
+            url: "http://__ALERTS_IP__"
+            topic: "${ALERT_TOPIC}"
+            priority: 4
+            click: "http://${ENDPOINT_IP}:${STATUS_PORT}"
+            default-alert:
+              failure-threshold: 3
+              success-threshold: 2
+              send-on-resolved: true
+        endpoints:
+          - name: "Internet (HTTPS)"
+            group: "1. Site uplink"
+            url: "${WEB_CHECK_URL}"
+            interval: "${CHECK_INTERVAL}"
+            client:
+              dns-resolver: "udp://__NAMESERVER__:53"
+            conditions:
+              - "[CONNECTED] == true"
+              - "[STATUS] < 400"
+              - "[RESPONSE_TIME] < 3000"
+            alerts:
+              - type: ntfy
+          - name: "Internet TLS certificate"
+            group: "1. Site uplink"
+            url: "${WEB_CHECK_URL}"
+            interval: 10m
+            client:
+              dns-resolver: "udp://__NAMESERVER__:53"
+            conditions:
+              - "[CONNECTED] == true"
+              - "[CERTIFICATE_EXPIRATION] > 336h"
+            alerts:
+              - type: ntfy
+                description: "certificate expires in less than 14 days"
+          - name: "DNS resolver"
+            group: "2. Site services"
+            url: "${DNS_CHECK_SERVER}"
+            interval: "${CHECK_INTERVAL}"
+            dns:
+              query-name: "${DNS_CHECK_NAME}"
+              query-type: "A"
+            conditions:
+              - "[DNS_RCODE] == NOERROR"
+            alerts:
+              - type: ntfy
+          - name: "${KEY_SERVICE_NAME}"
+            group: "2. Site services"
+            url: "${KEY_SERVICE_URL}"
+            interval: "${CHECK_INTERVAL}"
+            client:
+              dns-resolver: "udp://__NAMESERVER__:53"
+            conditions:
+              - "[CONNECTED] == true"
+            alerts:
+              - type: ntfy
+          - name: "Alerts (ntfy)"
+            group: "3. IT toolkit"
+            url: "http://itk-alerts/v1/health"
+            interval: 1m
+            client:
+              dns-resolver: "udp://__NAMESERVER__:53"
+            conditions:
+              - "[STATUS] == 200"
+              - "[BODY].healthy == true"
+          - name: "Speed Test"
+            group: "3. IT toolkit"
+            url: "http://itk-speedtest:3000/"
+            interval: 1m
+            client:
+              dns-resolver: "udp://__NAMESERVER__:53"
+            conditions:
+              - "[STATUS] == 200"
+            alerts:
+              - type: ntfy
+          - name: "IT Tools"
+            group: "3. IT toolkit"
+            url: "http://itk-toolbox/"
+            interval: 1m
+            client:
+              dns-resolver: "udp://__NAMESERVER__:53"
+            conditions:
+              - "[STATUS] == 200"
+            alerts:
+              - type: ntfy
+
+  # Status page and health checks: https://github.com/TwiN/gatus
+  itk-status:
+    image: ${IMAGE_REGISTRY}/twinproduction/gatus:v5.37.0
+    restart: unless-stopped
+    depends_on:
+      - itk-config
+      - itk-alerts
+    environment:
+      GATUS_CONFIG_PATH: /config/site-it-toolkit.yaml
+      GATUS_DELAY_START_SECONDS: "5"
+    ports:
+      - "${STATUS_PORT}:8080"
+    volumes:
+      - gatus_config:/config:ro
+      - gatus_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+
+  # Push notifications (browser, ntfy phone app, curl): https://ntfy.sh
+  # Anyone on the site network can subscribe to and publish on the alert
+  # topic. To lock it down, add NTFY_AUTH_* users, ACLs and tokens here.
+  itk-alerts:
+    image: ${IMAGE_REGISTRY}/binwiederhier/ntfy:v2.29.0
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: "http://${ENDPOINT_IP}:${ALERTS_PORT}"
+      NTFY_LISTEN_HTTP: ":80"
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+      NTFY_CACHE_DURATION: 72h
+      NTFY_ENABLE_SIGNUP: "false"
+      NTFY_ENABLE_LOGIN: "false"
+    ports:
+      - "${ALERTS_PORT}:80"
+    volumes:
+      - ntfy_cache:/var/cache/ntfy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+
+  # Browser-based LAN speed test: https://openspeedtest.com
+  itk-speedtest:
+    image: ${IMAGE_REGISTRY}/openspeedtest/latest:v2.0.6
+    restart: unless-stopped
+    ports:
+      - "${SPEEDTEST_PORT}:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  # Offline IT toolbox (subnet calculator, certificate and JWT decoders,
+  # hash, base64, cron, ...): https://github.com/CorentinTh/it-tools
+  itk-toolbox:
+    image: ${IMAGE_REGISTRY}/corentinth/it-tools:2024.10.22-7ca5933
+    restart: unless-stopped
+    ports:
+      - "${TOOLBOX_PORT}:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+
+volumes:
+  gatus_config: {}
+  gatus_data: {}
+  ntfy_cache: {}
