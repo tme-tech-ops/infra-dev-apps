@@ -12,7 +12,7 @@ imports:
   - iot_factory/definitions.yaml
   - iot_factory/remote_host_inputs.yaml
   - iot_factory/inputs.yaml
-  - iot_factory/outputs.yaml
+  - iot_factory/capabilities.yaml
 
 input_groups:
   remote_host:

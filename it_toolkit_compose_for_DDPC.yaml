@@ -12,9 +12,9 @@ description: >
 imports:
   - dell/types/types.yaml
   - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
-  - container_based/definitions.yaml
-  - container_based/inputs.yaml
-  - container_based/capabilities.yaml
+  - site_it_toolkit/definitions.yaml
+  - site_it_toolkit/inputs.yaml
+  - site_it_toolkit/capabilities.yaml
 
 input_groups:
   site:

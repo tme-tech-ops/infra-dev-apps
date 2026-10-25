@@ -17,7 +17,7 @@ node_templates:
     interfaces:
       dell.interfaces.lifecycle:
         start:
-          implementation: container_based/scripts/prepare_compose_yaml.py
+          implementation: site_it_toolkit/scripts/prepare_compose_yaml.py
           executor: central_deployment_agent
 
   # Instantiated only when registry_login_enabled is true. Use it with a

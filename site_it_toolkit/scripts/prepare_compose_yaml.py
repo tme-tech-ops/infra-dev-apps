@@ -1,7 +1,7 @@
 from dell import ctx
 from dell.exceptions import NonRecoverableError
 
-COMPOSE_FILE = "container_based/compose/site_it_toolkit.yaml"
+COMPOSE_FILE = "site_it_toolkit/compose/site_it_toolkit.yaml"
 
 # Read the compose file shipped in the blueprint package and hand it to the
 # nativeedge_compose node as a runtime property.

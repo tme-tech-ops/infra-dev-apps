@@ -17,9 +17,9 @@ imports:
   - vm/definitions.yaml
   - vm/inputs.yaml
   - vm/outputs.yaml
-  - iot_factory/ddpc/definitions.yaml
+  - iot_factory/ddpc_vm/definitions.yaml
   - iot_factory/inputs.yaml
-  - iot_factory/ddpc/outputs.yaml
+  - iot_factory/ddpc_vm/capabilities.yaml
 
 input_groups:
   artifact:
