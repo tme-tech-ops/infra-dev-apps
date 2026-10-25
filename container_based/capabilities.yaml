@@ -1,0 +1,41 @@
+dsl_definitions:
+
+  endpoint_ip: &endpoint_ip
+    jmespath:
+      - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)
+      - get_inventory:
+          get_environment_capability: ece_service_tag
+
+capabilities:
+
+  endpoint_service_tag:
+    description: Service tag of the Endpoint running the Site IT Toolkit
+    value: { get_environment_capability: ece_service_tag }
+
+  endpoint_ip:
+    description: Default host-network IP address of the Endpoint
+    value: *endpoint_ip
+
+  status_page_url:
+    description: Gatus status page with the site health checks
+    value:
+      concat: ["http://", *endpoint_ip, ":", { get_input: status_port }]
+
+  alerts_url:
+    description: ntfy alert topic. Open it in a browser or subscribe to it in the ntfy app to receive alerts.
+    value:
+      concat: ["http://", *endpoint_ip, ":", { get_input: alerts_port }, "/", { get_input: alert_topic }]
+
+  speedtest_url:
+    description: OpenSpeedTest LAN speed test
+    value:
+      concat: ["http://", *endpoint_ip, ":", { get_input: speedtest_port }]
+
+  toolbox_url:
+    description: IT-Tools browser toolbox
+    value:
+      concat: ["http://", *endpoint_ip, ":", { get_input: toolbox_port }]
+
+  compose_deployment_id:
+    description: DDPC Compute Service deployment id of the compose
+    value: { get_attribute: [nativeedge_compose, deployment_id] }

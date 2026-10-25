@@ -1,37 +1,64 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  This deploys nodered, influxdb, and grafana containers on a Dell Distributed Private Cloud (DDPC) Endpoint using the edge-plugin NativeEdgeCompose node type.
+  Deploys the Site IT Toolkit directly on a Dell Distributed Private Cloud
+  (DDPC) Endpoint with the edge-plugin NativeEdgeCompose node type: a Gatus
+  status page that watches the site's uplink, DNS and a key service, ntfy
+  push alerts, an OpenSpeedTest LAN speed test and the IT-Tools toolbox.
+  The stack is configured entirely in the compose file shipped with the
+  blueprint. Images come from Docker Hub or a mirror, with an optional
+  registry login (basic-auth secret, TLS verification).
 
 imports:
   - dell/types/types.yaml
   - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
   - container_based/definitions.yaml
   - container_based/inputs.yaml
-  - container_based/outputs.yaml
+  - container_based/capabilities.yaml
 
 input_groups:
-  nodered:
-    display_label: Node-RED Container
+  site:
+    display_label: Site
     collapsible: true
     index: 0
     inputs:
-      - nodered_name
-      - nodered_url
-  influxdb:
-    display_label: InfluxDB Container
+      - site_name
+      - alert_topic
+  health_checks:
+    display_label: Health Checks
     collapsible: true
     index: 1
     inputs:
-      - influxdb_name
-      - influxdb_url
-  grafana:
-    display_label: Grafana Container
+      - web_check_url
+      - dns_check_server
+      - dns_check_name
+      - key_service_name
+      - key_service_url
+      - check_interval
+  ports:
+    display_label: Published Ports
     collapsible: true
     index: 2
     inputs:
-      - grafana_name
-      - grafana_url
+      - status_port
+      - alerts_port
+      - speedtest_port
+      - toolbox_port
+  images:
+    display_label: Container Images
+    collapsible: true
+    index: 3
+    inputs:
+      - image_registry
+  registry_login:
+    display_label: Registry Login
+    collapsible: true
+    index: 4
+    inputs:
+      - registry_login_enabled
+      - registry_url
+      - registry_credentials_secret
+      - registry_tls_verify
 
 labels:
   csys-obj-type:
@@ -45,7 +72,7 @@ labels:
       - tme-tech-ops
   version:
     values:
-      - "4.0.0"
+      - "5.0.0"
 
 blueprint_labels:
   env:

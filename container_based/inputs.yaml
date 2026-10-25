@@ -1,100 +1,295 @@
 inputs:
 
-  nodered_name:
+  # --- Site ---
+
+  site_name:
     type: string
     hidden: false
-    required: true
     allow_update: false
-    display_label: Node-RED Container Name
+    display_label: Site Name
     description: |
-      Name of the Node-RED container on the Endpoint.
-    default: "nodered"
+      Name of the branch or edge site. Shown in the status page title and in
+      alert notifications.
+    default: "Branch Office"
     constraints:
-      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$
-        error_message: Must start with a letter or number and contain only letters, numbers, underscores, dots or hyphens (max 63).
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9 ._-]{0,39}$
+        error_message: Must start with a letter or number and contain only letters, numbers, spaces, dots, underscores or hyphens (max 40).
     display:
-      group: nodered
+      group: site
       index: 1
 
-  nodered_url:
+  alert_topic:
     type: string
     hidden: false
-    required: true
     allow_update: false
-    display_label: Node-RED Image
+    display_label: Alert Topic
     description: |
-      Image reference (registry/repository:tag) of the Node-RED container.
-      The registry must be included, e.g. mirror.gcr.io/nodered/node-red:latest.
-    default: "mirror.gcr.io/nodered/node-red:latest"
+      ntfy topic the status page publishes alerts to. Subscribe to it in a
+      browser or the ntfy phone app (server http://<endpoint-ip>:<alerts port>)
+      to receive alerts. Anyone on the site network who knows the topic can
+      read and post to it, so pick a name that is hard to guess.
+    default: "site-it-alerts"
     constraints:
-      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?/[a-z0-9._/-]+(:[a-zA-Z0-9._-]+)?$
-        error_message: Must be registry/repository[:tag], e.g. mirror.gcr.io/nodered/node-red:latest.
+      - pattern: ^[a-zA-Z0-9_-]{3,64}$
+        error_message: Must be 3 to 64 letters, numbers, underscores or hyphens.
     display:
-      group: nodered
+      group: site
       index: 2
 
-  influxdb_name:
+  # --- Health checks ---
+
+  web_check_url:
     type: string
     hidden: false
-    required: true
     allow_update: false
-    display_label: InfluxDB Container Name
+    display_label: Internet Check URL
     description: |
-      Name of the InfluxDB container on the Endpoint.
-    default: "influxdb"
+      HTTPS URL checked to confirm the site's internet uplink. Its TLS
+      certificate is also checked, and an alert is raised when it expires in
+      less than 14 days.
+    default: "https://www.dell.com"
     constraints:
-      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$
-        error_message: Must start with a letter or number and contain only letters, numbers, underscores, dots or hyphens (max 63).
+      - pattern: ^https://[a-zA-Z0-9.-]+(:[0-9]{1,5})?(/[^\s"]*)?$
+        error_message: Must be an https:// URL without spaces or double quotes.
     display:
-      group: influxdb
+      group: health_checks
       index: 1
 
-  influxdb_url:
+  dns_check_server:
     type: string
     hidden: false
-    required: true
     allow_update: false
-    display_label: InfluxDB Image
+    display_label: DNS Server
     description: |
-      Image reference (registry/repository:tag) of the InfluxDB container.
-      The registry must be included, e.g. mirror.gcr.io/influxdb:latest.
-    default: "mirror.gcr.io/influxdb:latest"
+      IPv4 address of the DNS server the site relies on. Set it to the site's
+      own resolver to watch it; the default is a public resolver.
+    default: "1.1.1.1"
     constraints:
-      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?/[a-z0-9._/-]+(:[a-zA-Z0-9._-]+)?$
-        error_message: Must be registry/repository[:tag], e.g. mirror.gcr.io/influxdb:latest.
+      - pattern: ^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$
+        error_message: Must be an IPv4 address, e.g. 10.0.0.53.
     display:
-      group: influxdb
+      group: health_checks
       index: 2
 
-  grafana_name:
+  dns_check_name:
     type: string
     hidden: false
-    required: true
     allow_update: false
-    display_label: Grafana Container Name
+    display_label: DNS Test Name
     description: |
-      Name of the Grafana container on the Endpoint.
-    default: "grafana"
+      Host name the DNS check resolves (A record), e.g. an internal server
+      name when DNS Server is the site resolver.
+    default: "www.dell.com"
     constraints:
-      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$
-        error_message: Must start with a letter or number and contain only letters, numbers, underscores, dots or hyphens (max 63).
+      - pattern: ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$
+        error_message: Must be a valid host name, e.g. fileserver.corp.example.com.
     display:
-      group: grafana
+      group: health_checks
+      index: 3
+
+  key_service_name:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Key Service Name
+    description: |
+      Display name of one more service the site depends on, e.g. File Server,
+      Point of Sale or Printer.
+    default: "Dell Support"
+    constraints:
+      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9 ._-]{0,39}$
+        error_message: Must start with a letter or number and contain only letters, numbers, spaces, dots, underscores or hyphens (max 40).
+    display:
+      group: health_checks
+      index: 4
+
+  key_service_url:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Key Service Address
+    description: |
+      Address of the key service. The check passes when a connection can be
+      made: an http:// or https:// URL, or tcp://<IPv4 address>:<port> for any
+      other TCP service (e.g. tcp://10.0.0.20:445 for a file share). TCP
+      checks need an IP address because they cannot resolve host names on a
+      DDPC Endpoint.
+    default: "https://www.dell.com/support/home"
+    constraints:
+      - pattern: ^(tcp://((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9]):[0-9]{1,5}|https?://[a-zA-Z0-9.-]+(:[0-9]{1,5})?(/[^\s"]*)?)$
+        error_message: Must be an http(s):// URL without spaces or double quotes, or tcp://<IPv4 address>:<port>.
+    display:
+      group: health_checks
+      index: 5
+
+  check_interval:
+    type: string
+    hidden: false
+    allow_update: false
+    display_label: Check Interval
+    description: |
+      How often the uplink, DNS and key service checks run. An alert is sent
+      after 3 failed checks in a row and again when the service recovers.
+    default: "1m"
+    constraints:
+      - valid_values: ["30s", "1m", "2m", "5m", "10m"]
+        error_message: Must be one of 30s, 1m, 2m, 5m or 10m.
+    display:
+      group: health_checks
+      index: 6
+
+  # --- Published ports ---
+
+  status_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Status Page Port
+    description: |
+      Endpoint port for the Gatus status page.
+    default: 8080
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be between 1024 and 65535.
+    display:
+      group: ports
       index: 1
 
-  grafana_url:
+  alerts_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Alerts Port
+    description: |
+      Endpoint port for the ntfy alerts server (web app and phone-app server
+      address).
+    default: 8081
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be between 1024 and 65535.
+    display:
+      group: ports
+      index: 2
+
+  speedtest_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: Speed Test Port
+    description: |
+      Endpoint port for the OpenSpeedTest LAN speed test.
+    default: 3000
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be between 1024 and 65535.
+    display:
+      group: ports
+      index: 3
+
+  toolbox_port:
+    type: integer
+    hidden: false
+    allow_update: false
+    display_label: IT Tools Port
+    description: |
+      Endpoint port for the IT-Tools toolbox.
+    default: 8082
+    constraints:
+      - in_range: [1024, 65535]
+        error_message: Must be between 1024 and 65535.
+    display:
+      group: ports
+      index: 4
+
+  # --- Container images ---
+
+  image_registry:
     type: string
     hidden: false
-    required: true
     allow_update: false
-    display_label: Grafana Image
+    display_label: Image Registry
     description: |
-      Image reference (registry/repository:tag) of the Grafana container.
-      The registry must be included, e.g. mirror.gcr.io/grafana/grafana:latest.
-    default: "mirror.gcr.io/grafana/grafana:latest"
+      Registry the images are pulled from, without a scheme. The default is
+      Docker Hub. To pull through a mirror or a pull-through cache, give its
+      host and project, e.g. harbor.example.com/dockerhub; images are then
+      pulled as <registry>/<namespace>/<image>:<tag>.
+    default: "docker.io"
     constraints:
-      - pattern: ^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?/[a-z0-9._/-]+(:[a-zA-Z0-9._-]+)?$
-        error_message: Must be registry/repository[:tag], e.g. mirror.gcr.io/grafana/grafana:latest.
+      - pattern: ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?(/[a-zA-Z0-9._-]+)*$
+        error_message: Must be a registry host[:port][/project] without http:// or https://.
     display:
-      group: grafana
+      group: images
+      index: 1
+
+  # --- Registry login ---
+
+  registry_login_enabled:
+    type: boolean
+    hidden: false
+    allow_update: false
+    display_label: Registry Login
+    description: |
+      Log the Endpoint in to a private registry before the images are pulled.
+      Requires Registry URL and Registry Credentials Secret.
+      Known issue: on DDPC 4.3 the login reports success but the Endpoint
+      still pulls anonymously, so private projects fail with "unauthorized".
+      Public and pull-through-cache projects work.
+    default: false
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: registry_login
+      index: 1
+
+  registry_url:
+    type: string
+    hidden: false
+    allow_update: false
+    only_with: registry_login_enabled
+    display_label: Registry URL
+    description: |
+      Registry host with optional port, without a scheme, e.g.
+      harbor.example.com or registry.example.com:5000.
+    default: ""
+    constraints:
+      - pattern: '^$|^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?(/[a-zA-Z0-9._/-]*)?$'
+        error_message: Must be a registry host[:port][/path] without http:// or https://.
+    display:
+      group: registry_login
       index: 2
+
+  registry_credentials_secret:
+    type: secret_key
+    hidden: false
+    allow_update: false
+    only_with: registry_login_enabled
+    display_label: Registry Credentials Secret
+    description: |
+      Name of the basic-auth secret (username / password) used to log in to
+      the registry.
+    required: false
+    constraints:
+      - type: basic_auth_credentials
+        error_message: Must be a basic_auth_credentials secret (username / password).
+    display:
+      group: registry_login
+      index: 3
+
+  registry_tls_verify:
+    type: boolean
+    hidden: false
+    allow_update: false
+    only_with: registry_login_enabled
+    display_label: Registry TLS Verify
+    description: |
+      Verify the registry's TLS certificate. Keep it enabled for registries
+      with a trusted certificate; disable it only for registries with a
+      self-signed certificate.
+    default: true
+    constraints:
+      - valid_values: [true, false]
+        error_message: Must be true or false.
+    display:
+      group: registry_login
+      index: 4

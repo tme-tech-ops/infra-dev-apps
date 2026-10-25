@@ -45,7 +45,7 @@ Use it to:
 | [`simple_vm_example_for_DDPC.yaml`](#3-simple_vm) | An Ubuntu 22.04 cloud-init VM, and returns its login details | DDPC Endpoint | edge, utilities, fabric |
 | [`mqtt_nodered_example_for_DDPC.yaml`](#4-mqtt_nodered) | The simple_vm VM, plus Docker, an MQTT broker and Node-RED with a sample flow | DDPC Endpoint | edge, utilities, fabric, ansible |
 | [`nginx_app_example_for_DDPC.yaml`](#5-nginx_app) | NGINX with TLS and basic auth on an **existing simple_vm deployment** | simple_vm deployment | fabric |
-| [`container_based_example_for_DDPC.yaml`](#6-container_based) | Node-RED, InfluxDB and Grafana containers directly on the Endpoint, from a fixed compose file | DDPC Endpoint | edge |
+| [`container_based_example_for_DDPC.yaml`](#6-container_based) | The **Site IT Toolkit** directly on the Endpoint: a status page with health checks, push alerts, a LAN speed test and an IT toolbox, from a fixed compose file, with an optional registry login | DDPC Endpoint | edge |
 | [`compose_app_example_for_DDPC.yaml`](#7-compose_app) | **Any** user-supplied compose definition directly on the Endpoint, with an optional registry login and Day-2 updates | DDPC Endpoint | edge |
 | [`remote_host_example.yaml`](#8-remote_host) | NGINX with TLS and basic auth on any SSH-reachable Ubuntu host outside DDPC | none (any orchestrator) | fabric |
 | [`iot_factory_remote_host_example.yaml`](#9-iot_factory) | An interactive IoT Smart Factory demo (Mosquitto, Node-RED line simulator and control room, InfluxDB, Grafana, MQTTX Web) on a fresh **Ubuntu 24.04** host, installed end-to-end by Ansible over SSH. Factories can join each other. | none (any orchestrator) | ansible |
@@ -58,7 +58,7 @@ Use it to:
 - **Generated SSH keys:** an RSA key pair is created and stored in the DAP secret store, then reused for VM login and by layered blueprints.
 - **Password handling:** the VM password is read from a secret and hashed with bcrypt for cloud-init at deploy time.
 - **Endpoint proxy (eo-proxy):** Ansible and Fabric reach the VM through the DDPC Endpoint's management channel, so the VM doesn't need to be reachable from the orchestrator.
-- **Containers directly on the Endpoint:** the edge-plugin `NativeEdgeCompose` node type, from a static file (container_based) or a validated user definition (compose_app).
+- **Containers directly on the Endpoint:** the edge-plugin `NativeEdgeCompose` node type, from a fixed compose file shipped in the blueprint (container_based, the Site IT Toolkit) or a validated user definition (compose_app). Both support an optional registry login with TLS verification.
 - **Layering:** nginx_app is deployed *on* a simple_vm deployment and reads its details with `get_environment_capability`.
 - **Day-2:** compose_app supports drift detection and deployment update (`check_drift` / `update` / `postupdate`).
 - **Beyond DDPC:** remote_host runs the same NGINX payload over plain SSH, with no proxy. iot_factory builds a full IoT demo on a fresh Ubuntu 24.04 host with Ansible over plain SSH.
@@ -97,7 +97,7 @@ infra-dev-apps/
 │   └── playbooks/         install_docker.yaml, docker_login.yaml, deploy_mqtt_nodered.yaml, files/app_data/
 ├── nginx_app/             Fabric node templates
 ├── container_based/
-│   ├── compose/           container_compose.yaml
+│   ├── compose/           site_it_toolkit.yaml (the whole stack configuration)
 │   └── scripts/           prepare_compose_yaml.py
 ├── compose_app/
 │   └── scripts/           compose_ops.py (validation, drift, update gate)
@@ -132,7 +132,7 @@ Secrets are created in the Orchestrator UI under **Administration > Security > S
 | OS image | Binary Configuration | Binary Image Url, Access User, Access Token, Version | simple_vm, mqtt_nodered |
 | VM password | Password | Password | simple_vm, mqtt_nodered |
 | Docker registry | Docker Configuration | Username, Password | mqtt_nodered (optional) |
-| Registry login | Basic Auth Credentials | Username, Password | compose_app (optional) |
+| Registry login | Basic Auth Credentials | Username, Password | container_based, compose_app (optional) |
 | NGINX credentials | Basic Auth Credentials | Username, Password | nginx_app, remote_host |
 | Remote host SSH key | SSH private key | SSH Private Key | remote_host, iot_factory |
 | Stack admin login | Basic Auth Credentials | Username, Password (8+ characters) | iot_factory |
@@ -478,43 +478,111 @@ The SSH connection to the parent VM and the install environment are written once
 
 ### Description
 
-Runs Node-RED, InfluxDB and Grafana as containers **directly on the DDPC Endpoint** (no VM), using the edge-plugin `NativeEdgeCompose` node type. The stack is defined in a static compose file, `container_based/compose/container_compose.yaml`, which includes commented examples of serial-device passthrough and resource limits.
+Runs the **Site IT Toolkit** as containers **directly on the DDPC Endpoint** (no VM), using the edge-plugin `NativeEdgeCompose` node type. The toolkit gives a branch or edge site a small set of IT tools on the hardware that is already there:
+
+| Service | Image | What it is for | Port |
+|---|---|---|---|
+| `itk-status` | [Gatus](https://github.com/TwiN/gatus) `v5.37.0` | Status page and health checks: the internet uplink, its TLS certificate (alert below 14 days), the site DNS resolver, one key service you name (TCP or HTTP), and the toolkit itself. Header buttons open the other tools. | 8080 |
+| `itk-alerts` | [ntfy](https://ntfy.sh) `v2.29.0` | Push notifications. Gatus posts an alert after 3 failed checks in a row and again on recovery. Subscribe to the topic in a browser, the ntfy phone app or with `curl`. | 8081 |
+| `itk-speedtest` | [OpenSpeedTest](https://openspeedtest.com) `v2.0.6` | Browser-based LAN speed test, for "the network is slow" tickets | 3000 |
+| `itk-toolbox` | [IT-Tools](https://github.com/CorentinTh/it-tools) | Offline browser toolbox: subnet calculator, certificate / JWT / base64 decoders, hashes, cron and more | 8082 |
+| `itk-config` | busybox `1.37.0` | Renders the Gatus configuration into a shared volume and keeps it current (see below) | – |
+
+The stack is **configured entirely in the compose file**, `container_based/compose/site_it_toolkit.yaml`. The blueprint only supplies the values of the `${VAR}` references in it (site name, check targets, ports, image registry and the Endpoint IP). The file also shows how to work within the [compose features DDPC supports](#supported-compose-features):
+
+- **Configuration without bind mounts.** The Gatus configuration is inline, in the `GATUS_CONFIG` environment variable of `itk-config`, which writes it to the `gatus_config` named volume that `itk-status` mounts read-only.
+- **Name resolution for a scratch image.** Gatus ships as a `scratch` image and gets no `/etc/resolv.conf` on a DDPC Endpoint, so on its own it cannot resolve any host name. Every 30 s `itk-config` fills in the compose network's DNS server (used as each check's `client.dns-resolver`) and the alerts service's IP (alert delivery has no resolver setting), and rewrites the file only when something changed; Gatus reloads it automatically.
+- **Service-to-service traffic by name.** Gatus checks and alerts use service names (`http://itk-alerts`, `http://itk-speedtest:3000`). Containers on the Endpoint cannot reach the Endpoint's own published ports, so only the browser links use the Endpoint IP. Service names only resolve inside one compose, so the whole toolkit is a single compose. Containers are named after their service on the Endpoint, hence the `itk-` prefix, which keeps them recognizable in the Endpoint's Containers view.
+- **Resource limits** (`deploy.resources.limits`) on every service.
+- **An image registry prefix,** so the same file pulls from Docker Hub, a mirror or a Harbor pull-through cache.
 
 Use it as a template for a fixed container stack that ships inside the blueprint.
 
 ### Secrets
 
-None. `definitions.yaml` contains a commented-out `RegistryLogin` node that you can enable for private registries. See [compose_app](#7-compose_app) for a working example.
+| Input | Secret type | Required | Purpose |
+|---|---|---|---|
+| `registry_credentials_secret` | Basic Auth Credentials | Only with `registry_login_enabled` | Username and password for the Endpoint registry login |
 
 ### Inputs
 
-| Group | Input | Label | Type | Default | Upd |
-|---|---|---|---|---|---|
-| Node-RED Container | `nodered_name` | Node-RED Container Name | string | `nodered` | ✗ |
-| Node-RED Container | `nodered_url` | Node-RED Image | string | `mirror.gcr.io/nodered/node-red:latest` | ✗ |
-| InfluxDB Container | `influxdb_name` | InfluxDB Container Name | string | `influxdb` | ✗ |
-| InfluxDB Container | `influxdb_url` | InfluxDB Image | string | `mirror.gcr.io/influxdb:latest` | ✗ |
-| Grafana Container | `grafana_name` | Grafana Container Name | string | `grafana` | ✗ |
-| Grafana Container | `grafana_url` | Grafana Image | string | `mirror.gcr.io/grafana/grafana:latest` | ✗ |
+All inputs are fixed after deployment (`allow_update: false`).
 
-Container names: letters, numbers, `_`, `.` and `-`, at most 63 characters. Images must include the registry (`registry/repository[:tag]`). The inputs are passed to the compose file as environment variables (`NODERED_NAME`, `NODERED_URL`, …) and substituted into `${VAR:-default}` references.
+**Site**
+
+| Input | Label | Type | Default | Notes |
+|---|---|---|---|---|
+| `site_name` | Site Name | string | `Branch Office` | Status page title and alert text. Letters, numbers, spaces, `.`, `_`, `-`; at most 40 characters. |
+| `alert_topic` | Alert Topic | string | `site-it-alerts` | ntfy topic for the alerts. 3–64 letters, numbers, `_` or `-`. Anyone on the site network who knows it can read and post to it, so pick a name that is hard to guess. |
+
+**Health Checks**
+
+| Input | Label | Type | Default | Notes |
+|---|---|---|---|---|
+| `web_check_url` | Internet Check URL | string | `https://www.dell.com` | Uplink check (connects, status below 400, response under 3 s) and the TLS certificate check (every 10 minutes) |
+| `dns_check_server` | DNS Server | string | `1.1.1.1` | IPv4 address of the resolver to watch. Set it to the site's own DNS server. |
+| `dns_check_name` | DNS Test Name | string | `www.dell.com` | Name resolved (A record) by the DNS check |
+| `key_service_name` | Key Service Name | string | `Dell Support` | Display name of one more service the site depends on |
+| `key_service_url` | Key Service Address | string | `https://www.dell.com/support/home` | An `http(s)://` URL, or `tcp://<IPv4>:<port>` (e.g. `tcp://10.0.0.20:445` for a file share). Passes when a connection can be made. TCP checks need an IP address because they can't resolve names on DDPC. |
+| `check_interval` | Check Interval | string | `1m` | One of `30s`, `1m`, `2m`, `5m`, `10m` |
+
+**Published Ports**
+
+| Input | Label | Type | Default |
+|---|---|---|---|
+| `status_port` | Status Page Port | integer | `8080` |
+| `alerts_port` | Alerts Port | integer | `8081` |
+| `speedtest_port` | Speed Test Port | integer | `3000` |
+| `toolbox_port` | IT Tools Port | integer | `8082` |
+
+Ports must be between 1024 and 65535 and free on the Endpoint.
+
+**Container Images**
+
+| Input | Label | Type | Default | Notes |
+|---|---|---|---|---|
+| `image_registry` | Image Registry | string | `docker.io` | Prefix for every image (`<registry>/<namespace>/<image>:<tag>`). For a mirror or pull-through cache give host and project, e.g. `harbor.example.com/dockerhub`. |
+
+**Registry Login**
+
+| Input | Label | Type | Default | Notes |
+|---|---|---|---|---|
+| `registry_login_enabled` | Registry Login | boolean | `false` | Creates the `registry_login` node |
+| `registry_url` | Registry URL | string | `""` | Only with `registry_login_enabled`; host[:port][/path], no scheme |
+| `registry_credentials_secret` | Registry Credentials Secret | secret_key | – | Only with `registry_login_enabled`; schema `basic_auth_credentials` |
+| `registry_tls_verify` | Registry TLS Verify | boolean | `true` | Only with `registry_login_enabled`. Turn it off only for registries with self-signed certificates. |
+
+The registry login is affected by a [platform bug on EdgeOS 4.3](#11-known-issues-and-limitations): it reports success but images are still pulled anonymously.
+
+### Customizing the stack
+
+Edit `container_based/compose/site_it_toolkit.yaml` and re-upload the blueprint:
+
+- **More health checks:** add entries under `endpoints:` in `GATUS_CONFIG`. Gatus supports HTTP, TCP, DNS, TLS-certificate and more ([conditions](https://github.com/TwiN/gatus#conditions)). Give HTTP checks the same `client.dns-resolver` line as the existing ones, and TCP checks an IP address. Add `[CONNECTED] == true` to HTTP checks: on a failed connection `[STATUS]` is 0, so a condition like `[STATUS] < 400` alone would pass. ICMP (ping) checks need `NET_RAW`, which DDPC containers don't get, so use a TCP check instead.
+- **Locking down alerts:** add ntfy's `NTFY_AUTH_DEFAULT_ACCESS`, `NTFY_AUTH_USERS`, `NTFY_AUTH_ACCESS` and `NTFY_AUTH_TOKENS` to the `itk-alerts` service, and give Gatus the token in `alerting.ntfy.token`.
+- **Write `$` in the file only as part of a `${VAR}` reference** that the blueprint supplies. The edge-plugin substitutes `$VAR` too, and DDPC does not unescape `$$`.
 
 ### Node template step-through
 
 Defined in `container_based/definitions.yaml`:
 
-1. **`prepare_compose_yaml`**: its `start` operation runs `container_based/scripts/prepare_compose_yaml.py`, which downloads `compose/container_compose.yaml` from the blueprint package and stores the contents as the `compose_yaml` runtime property. It fails if the file is missing.
-2. **`nativeedge_compose`** (edge `NativeEdgeCompose`): sends that definition to the Endpoint found with `get_environment_capability: ece_service_tag`. The compose deployment is named after the DAP deployment, and the six inputs are passed as environment variables. It depends on `prepare_compose_yaml`.
+1. **`prepare_compose_yaml`**: its `start` operation runs `container_based/scripts/prepare_compose_yaml.py`, which downloads `compose/site_it_toolkit.yaml` from the blueprint package and stores the contents as the `compose_yaml` runtime property. It fails if the file is missing.
+2. **`registry_login`** (edge `RegistryLogin`): instance count is 1 when `registry_login_enabled` is true and 0 otherwise. It logs the Endpoint in to `registry_url` with the username and password from the secret, verifying the registry certificate unless `registry_tls_verify` is false. It depends on `prepare_compose_yaml`.
+3. **`nativeedge_compose`** (edge `NativeEdgeCompose`): sends the definition to the Endpoint found with `get_environment_capability: ece_service_tag`, with the inputs as compose environment variables. Integer ports are turned into strings with `concat`, because the plugin only accepts string values. `ENDPOINT_IP` is read from the Endpoint inventory. It depends on `prepare_compose_yaml` and `registry_login`.
 
-**Uninstall** removes the containers. The named volumes (`nodered_data`, `influxdb_data`, `grafana_data`) stay on the Endpoint.
+**Uninstall** removes the containers. The registry login (Endpoint-wide) and the named volumes (`gatus_config`, `gatus_data`, `ntfy_cache`) are **not** reverted; a later deployment with the same name reattaches the status history.
 
 ### Capabilities
 
 | Capability | Value |
 |---|---|
-| `node_red_url` | `http://<endpoint-ip>:1880` |
-| `influxdb_url` | `http://<endpoint-ip>:8086` |
-| `grafana_url` | `http://<endpoint-ip>:3000` |
+| `endpoint_service_tag` | Endpoint service tag |
+| `endpoint_ip` | Endpoint default host-network IP |
+| `status_page_url` | `http://<endpoint-ip>:<status_port>` |
+| `alerts_url` | `http://<endpoint-ip>:<alerts_port>/<alert_topic>` |
+| `speedtest_url` | `http://<endpoint-ip>:<speedtest_port>` |
+| `toolbox_url` | `http://<endpoint-ip>:<toolbox_port>` |
+| `compose_deployment_id` | DDPC Compute Service deployment ID |
 
 `<endpoint-ip>` is the Endpoint's default host-network IP, read from inventory with `get_inventory`.
 
@@ -880,7 +948,7 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 
 ## 11. Known issues and limitations
 
-- **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. compose_app's login wiring will work unchanged once the platform is fixed.
+- **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. The login wiring in container_based and compose_app will work unchanged once the platform is fixed.
 - **SSH host keys are not verified** by remote_host and iot_factory (`StrictHostKeyChecking=no`), the same as the eo-proxy blueprints. To harden this, pin the host key in a `known_hosts` file and pass it with `ansible_ssh_common_args` (Ansible) or `connect_kwargs` (Fabric).
 - **iot_factory is tested only on Ubuntu 24.04 LTS** and refuses other systems at preflight. It needs internet access (Docker apt repo, Docker Hub); there is no air-gapped mode yet. Changing `stack_admin_credentials` after the first install updates Node-RED, Grafana's login file and MQTT, but not the InfluxDB or Grafana admin passwords already stored in their databases.
 - **Day-2 is only supported by compose_app.** The other entry points support install and uninstall; a deployment update on simple_vm only refreshes the VM IP.

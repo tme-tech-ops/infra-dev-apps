@@ -1,3 +1,13 @@
+dsl_definitions:
+
+  # Default host-network IP of the Endpoint, read from inventory. The browser
+  # links on the status page and in the alerts point at this address.
+  endpoint_ip: &endpoint_ip
+    jmespath:
+      - extra.hw_core.network.hostNetwork[?isDefault==`true`].ipAddress | [0] | to_string(@)
+      - get_inventory:
+          get_environment_capability: ece_service_tag
+
 node_templates:
 
   # Loads the compose file into a runtime property. Nothing is created
@@ -10,18 +20,31 @@ node_templates:
           implementation: container_based/scripts/prepare_compose_yaml.py
           executor: central_deployment_agent
 
-  # Registry login template when needed (see compose_app for a working,
-  # optional registry login with a basic_auth_credentials secret).
-  # registry_login:
-  #   type: dell.nodes.nativeedge.template.RegistryLogin
-  #   properties:
-  #     registry_config:
-  #       credentials:
-  #         - registry_url: { get_input: registry_url }
-  #           username: { get_secret: [{ get_input: registry_credentials_secret }, username] }
-  #           password: { get_secret: [{ get_input: registry_credentials_secret }, password] }
-  #     service_tag: { get_environment_capability: ece_service_tag }
+  # Instantiated only when registry_login_enabled is true. Use it with a
+  # private registry or a pull-through cache set in Image Registry.
+  registry_login:
+    type: dell.nodes.nativeedge.template.RegistryLogin
+    capabilities:
+      scalable:
+        properties:
+          default_instances:
+            jmespath:
+              - 'length([?registry_login_enabled == `true`]) || `0`'
+              - [{"registry_login_enabled": { get_input: registry_login_enabled }}]
+    properties:
+      service_tag: { get_environment_capability: ece_service_tag }
+      registry_config:
+        credentials:
+          - registry_url: { get_input: registry_url }
+            username: { get_secret: [{ get_input: registry_credentials_secret }, username] }
+            password: { get_secret: [{ get_input: registry_credentials_secret }, password] }
+            tls_verify: { get_input: registry_tls_verify }
+    relationships:
+      - type: dell.relationships.depends_on
+        target: prepare_compose_yaml
 
+  # Runs the Site IT Toolkit stack on the Endpoint. Compose environment
+  # values must be strings, so integer inputs are wrapped in concat.
   nativeedge_compose:
     type: dell.nodes.nativeedge.template.NativeEdgeCompose
     properties:
@@ -29,20 +52,24 @@ node_templates:
         service_tag: { get_environment_capability: ece_service_tag }
         definition:
           name: { get_sys: [deployment, name] }
-          compose: { get_attribute: [ prepare_compose_yaml, compose_yaml ] }
+          compose: { get_attribute: [prepare_compose_yaml, compose_yaml] }
           environment_variables:
-            NODERED_NAME: { get_input: nodered_name }
-            NODERED_URL: { get_input: nodered_url }
-            INFLUXDB_NAME: { get_input: influxdb_name }
-            INFLUXDB_URL: { get_input: influxdb_url }
-            GRAFANA_NAME: { get_input: grafana_name }
-            GRAFANA_URL: { get_input: grafana_url }
-            # CPU_LIMIT: { get_input: cpu_limit }
-            # MEMORY_LIMIT: { get_input: memory_limit }
-            # MEMORY_RESERVATION: { get_input: memory_reservation }
-            # SERIAL_PORT: { get_input: serial_port }
+            SITE_NAME: { get_input: site_name }
+            ALERT_TOPIC: { get_input: alert_topic }
+            WEB_CHECK_URL: { get_input: web_check_url }
+            DNS_CHECK_SERVER: { get_input: dns_check_server }
+            DNS_CHECK_NAME: { get_input: dns_check_name }
+            KEY_SERVICE_NAME: { get_input: key_service_name }
+            KEY_SERVICE_URL: { get_input: key_service_url }
+            CHECK_INTERVAL: { get_input: check_interval }
+            STATUS_PORT: { concat: [{ get_input: status_port }] }
+            ALERTS_PORT: { concat: [{ get_input: alerts_port }] }
+            SPEEDTEST_PORT: { concat: [{ get_input: speedtest_port }] }
+            TOOLBOX_PORT: { concat: [{ get_input: toolbox_port }] }
+            IMAGE_REGISTRY: { get_input: image_registry }
+            ENDPOINT_IP: *endpoint_ip
     relationships:
       - type: dell.relationships.depends_on
         target: prepare_compose_yaml
-      # - type: dell.relationships.depends_on
-      #   target: registry_login
+      - type: dell.relationships.depends_on
+        target: registry_login
