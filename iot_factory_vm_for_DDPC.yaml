@@ -1,7 +1,12 @@
 tosca_definitions_version: dell_1_1
 
 description: >
-  This blueprint creates a Virtual Machine on a Dell Distributed Private Cloud (DDPC) Endpoint and deploys MQTT and Node-Red containers and automates setting up a simple Node-Red flow.
+  This blueprint creates an Ubuntu 24.04 cloud-init Virtual Machine on a Dell
+  Distributed Private Cloud (DDPC) Endpoint and uses Ansible, through the
+  Endpoint proxy, to turn it into an IoT Smart Factory demo: Docker, a Mosquitto
+  MQTT broker, Node-RED (packaging-line simulator, fault injection and alert
+  rules), InfluxDB and a provisioned Grafana dashboard. The OS Image Secret must
+  point to an Ubuntu 24.04 cloud image.
 
 imports:
   - dell/types/types.yaml
@@ -12,9 +17,9 @@ imports:
   - vm/definitions.yaml
   - vm/inputs.yaml
   - vm/outputs.yaml
-  - mqtt_nodered/definitions.yaml
-  - mqtt_nodered/inputs.yaml
-  - mqtt_nodered/outputs.yaml
+  - iot_factory/ddpc_vm/definitions.yaml
+  - iot_factory/inputs.yaml
+  - iot_factory/ddpc_vm/capabilities.yaml
 
 input_groups:
   artifact:
@@ -23,18 +28,10 @@ input_groups:
     index: 0
     inputs:
       - os_image_secret
-  registry:
-    display_label: Registry Configuration
-    collapsible: true
-    index: 1
-    inputs:
-      - use_docker_authentication
-      - registry_url
-      - registry_credentials
   vm:
     display_label: DDPC Virtual Machine
     collapsible: true
-    index: 2
+    index: 1
     inputs:
       - vm_hostname
       - vm_user_name
@@ -46,7 +43,7 @@ input_groups:
   device_passthrough:
     display_label: Device Passthrough
     collapsible: true
-    index: 3
+    index: 2
     inputs:
       - use_passthrough
       - pcie
@@ -57,7 +54,7 @@ input_groups:
   network:
     display_label: Network Configuration
     collapsible: true
-    index: 4
+    index: 3
     inputs:
       - vnic_0_segment_name
       - use_dhcp
@@ -76,10 +73,42 @@ input_groups:
       - dns2
       - use_nat2
       - port_forward_rules2
+  factory:
+    display_label: Smart Factory Demo
+    collapsible: true
+    index: 4
+    inputs:
+      - stack_admin_credentials
+      - factory_site
+      - factory_line
+      - publish_interval
+      - auto_chaos
+      - grafana_anonymous_viewer
+  ports:
+    display_label: Service Ports
+    collapsible: true
+    index: 5
+    inputs:
+      - mqtt_port
+      - nodered_port
+      - grafana_port
+      - influxdb_port
+      - mqtt_ws_port
+      - mqttx_web_port
+  join:
+    display_label: Factory Network
+    collapsible: true
+    index: 6
+    inputs:
+      - accept_joins
+      - bridge_credentials
+      - bridge_port
+      - join_hub
+      - hub_deployment_id
   ansible_settings:
     display_label: Ansible Settings
     collapsible: true
-    index: 5
+    index: 7
     inputs:
       - ansible_debug_level
       - ansible_timeout

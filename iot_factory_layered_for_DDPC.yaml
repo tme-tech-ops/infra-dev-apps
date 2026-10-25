@@ -1,0 +1,77 @@
+tosca_definitions_version: dell_1_1
+
+description: >
+  This blueprint installs the IoT Smart Factory demo on the Virtual Machine of
+  an existing simple_vm deployment (select it as the parent in Deploy On). It
+  uses Ansible, through the DDPC Endpoint proxy, to add Docker, a Mosquitto
+  MQTT broker, Node-RED (packaging-line simulator, fault injection and alert
+  rules), InfluxDB and a provisioned Grafana dashboard. The VM must run Ubuntu
+  24.04 with internet access. Uninstall removes the demo and leaves the VM.
+
+imports:
+  - dell/types/types.yaml
+  - plugin:ansible-plugin?version= >=4.1.9.0,<5.0.0.0
+  - iot_factory/ddpc_layered/definitions.yaml
+  - iot_factory/inputs.yaml
+  - iot_factory/ddpc_layered/capabilities.yaml
+
+input_groups:
+  factory:
+    display_label: Smart Factory Demo
+    collapsible: true
+    index: 0
+    inputs:
+      - stack_admin_credentials
+      - factory_site
+      - factory_line
+      - publish_interval
+      - auto_chaos
+      - grafana_anonymous_viewer
+  ports:
+    display_label: Service Ports
+    collapsible: true
+    index: 1
+    inputs:
+      - mqtt_port
+      - nodered_port
+      - grafana_port
+      - influxdb_port
+      - mqtt_ws_port
+      - mqttx_web_port
+  join:
+    display_label: Factory Network
+    collapsible: true
+    index: 2
+    inputs:
+      - accept_joins
+      - bridge_credentials
+      - bridge_port
+      - join_hub
+      - hub_deployment_id
+  ansible_settings:
+    display_label: Ansible Settings
+    collapsible: true
+    index: 3
+    inputs:
+      - ansible_debug_level
+      - ansible_timeout
+      - ansible_log_stdout
+
+labels:
+  csys-obj-type:
+    values:
+      - environment
+  env:
+    values:
+      - ddpc
+  solution:
+    values:
+      - tme-tech-ops
+  version:
+    values:
+      - "4.0.0"
+
+blueprint_labels:
+  env:
+    values:
+      - ddpc

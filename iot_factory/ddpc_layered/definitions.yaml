@@ -1,0 +1,248 @@
+dsl_definitions:
+
+  # Terse, readable Ansible output for the DAP event log (see
+  # iot_factory/definitions.yaml for why the iot_factory callback is used).
+  ansible_env_vars: &ansible_env_vars
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+    ANSIBLE_INVALID_TASK_ATTRIBUTE_FAILED: "False"
+    ANSIBLE_STDOUT_CALLBACK: iot_factory
+    ANSIBLE_CALLBACK_RESULT_FORMAT: yaml
+    ANSIBLE_DISPLAY_SKIPPED_HOSTS: "False"
+    ANSIBLE_DEPRECATION_WARNINGS: "False"
+    ANSIBLE_PYTHON_INTERPRETER: auto_silent
+    ANSIBLE_NOCOLOR: "True"
+    # The eo-proxy publishes each session as a new cluster service, and its DNS
+    # name takes up to a minute or two to resolve. SSH retries (exit 255, with
+    # backoff of up to 30 s) wait for it inside the run, so a plugin-level retry
+    # isn't spent on it.
+    ANSIBLE_SSH_RETRIES: "10"
+
+  # The parent simple_vm's IP on its first NIC. Services are published on it.
+  factory_host_ip: &factory_host_ip
+    get_environment_capability: vm_ip
+
+  # Playbooks reach the VM through the DDPC Endpoint proxy (ECANS) resolved by
+  # vm_info, so the VM doesn't need to be reachable from the orchestrator. The
+  # plugin swaps ip/port for the proxy address at run time. Proxy addresses are
+  # reused, so host keys are not recorded.
+  vm_inventory: &vm_inventory
+    inventory_proxy_settings:
+      factory_host:
+        ip: { get_environment_capability: vm_name }
+        port: 22
+        proxy_settings: { get_attribute: [vm_info, connection_proxy_settings] }
+    sources:
+      all:
+        hosts:
+          factory_host:
+            ansible_host: { get_attribute: [SELF, inventory_proxy_settings, factory_host, ip] }
+            ansible_port: { get_attribute: [SELF, inventory_proxy_settings, factory_host, port] }
+            ansible_user: { get_environment_capability: vm_user_name }
+            ansible_ssh_private_key_file:
+              get_secret: { get_environment_capability: vm_ssh_private_key }
+            ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+            ansible_become: true
+    ansible_env_vars: *ansible_env_vars
+
+  ansible_common_properties: &ansible_common_properties
+    <<: *vm_inventory
+    ansible_external_venv: /opt/ansible
+    log_stdout: { get_input: ansible_log_stdout }
+    store_facts: false
+    timeout: { get_input: ansible_timeout }
+    debug_level: { get_input: ansible_debug_level }
+    # The plugin retries failed playbooks (exit code 2) as well as unreachable
+    # hosts. The playbooks retry transient steps themselves, so one extra
+    # attempt is enough.
+    number_of_attempts: 2
+
+  # Variables shared by the stack playbooks (deploy, verify, teardown).
+  stack_run_data: &stack_run_data
+    factory_site: { get_input: factory_site }
+    factory_line: { get_input: factory_line }
+    publish_interval: { get_input: publish_interval }
+    auto_chaos: { get_input: auto_chaos }
+    grafana_anonymous_viewer: { get_input: grafana_anonymous_viewer }
+    mqtt_port: { get_input: mqtt_port }
+    nodered_port: { get_input: nodered_port }
+    grafana_port: { get_input: grafana_port }
+    influxdb_port: { get_input: influxdb_port }
+    mqtt_ws_port: { get_input: mqtt_ws_port }
+    mqttx_web_port: { get_input: mqttx_web_port }
+    bridge_port: { get_input: bridge_port }
+    public_host: *factory_host_ip
+    admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
+    admin_password: { get_secret: [{ get_input: stack_admin_credentials }, password] }
+
+# Same playbook chain as the remote-host entry, run inside the parent
+# simple_vm's VM. The VM belongs to the parent deployment, so uninstall runs
+# the teardown playbooks and leaves the VM as it was.
+node_templates:
+
+  # Resolves the Endpoint proxy target for the parent VM. It only sets runtime
+  # properties, so there is nothing to undo on uninstall.
+  vm_info:
+    type: dell.nodes.Root
+    interfaces:
+      dell.interfaces.lifecycle:
+        create:
+          implementation: vm/scripts/get_target_id.py
+          executor: central_deployment_agent
+          inputs:
+            service_tag: { get_environment_capability: service_tag }
+
+  # Fails fast (before any change) unless the VM is Ubuntu 24.04 with enough
+  # resources, free ports and internet access. Check the parent simple_vm's OS
+  # Image Secret, size and network segment.
+  preflight:
+    type: dell.nodes.ansible.Executor
+    properties:
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/preflight.yaml
+      # A failed check is final: fail fast instead of retrying.
+      number_of_attempts: 1
+      run_data:
+        required_ports:
+          - { get_input: mqtt_port }
+          - { get_input: nodered_port }
+          - { get_input: grafana_port }
+          - { get_input: influxdb_port }
+          - { get_input: mqtt_ws_port }
+          - { get_input: mqttx_web_port }
+          - { get_input: bridge_port }
+    relationships:
+      - type: dell.relationships.depends_on
+        target: vm_info
+
+  # Docker CE from the official apt repository. Uninstall removes Docker only
+  # if this blueprint installed it.
+  install_docker:
+    type: dell.nodes.ansible.Executor
+    properties: &install_docker_properties
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/install_docker.yaml
+    interfaces:
+      dell.interfaces.lifecycle:
+        stop:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *install_docker_properties
+            playbook_path: iot_factory/playbooks/teardown_docker.yaml
+    relationships:
+      - type: dell.relationships.depends_on
+        target: preflight
+
+  # Mosquitto, Node-RED, InfluxDB and Grafana under /opt/iot-factory.
+  # Uninstall runs compose down (volumes and images) and removes the directory.
+  deploy_stack:
+    type: dell.nodes.ansible.Executor
+    properties: &deploy_stack_properties
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/deploy_stack.yaml
+      run_data: *stack_run_data
+      sensitive_keys:
+        - ansible_password
+        - admin_password
+    interfaces:
+      dell.interfaces.lifecycle:
+        stop:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *deploy_stack_properties
+            playbook_path: iot_factory/playbooks/teardown_stack.yaml
+    relationships:
+      - type: dell.relationships.depends_on
+        target: install_docker
+
+  # End-to-end check that the demo is live: telemetry on MQTT, points in
+  # InfluxDB, Grafana dashboard provisioned, Node-RED auth enforced.
+  verify_demo:
+    type: dell.nodes.ansible.Executor
+    properties:
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/verify_demo.yaml
+      run_data: *stack_run_data
+      sensitive_keys:
+        - ansible_password
+        - admin_password
+    relationships:
+      - type: dell.relationships.depends_on
+        target: deploy_stack
+
+  # Optional (hub side): a bridge listener with its own credentials and an ACL.
+  # Instantiated only when accept_joins is true.
+  accept_joins:
+    type: dell.nodes.ansible.Executor
+    capabilities:
+      scalable:
+        properties:
+          default_instances:
+            jmespath:
+              - 'length([?accept_joins == `true`]) || `0`'
+              - [{"accept_joins": { get_input: accept_joins }}]
+    properties: &accept_joins_properties
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/accept_joins.yaml
+      run_data:
+        factory_site: { get_input: factory_site }
+        factory_line: { get_input: factory_line }
+        bridge_port: { get_input: bridge_port }
+        admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
+        bridge_username: { get_secret: [{ get_input: bridge_credentials }, username] }
+        bridge_password: { get_secret: [{ get_input: bridge_credentials }, password] }
+      sensitive_keys:
+        - ansible_password
+        - bridge_password
+    interfaces:
+      dell.interfaces.lifecycle:
+        stop:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *accept_joins_properties
+            playbook_path: iot_factory/playbooks/close_joins.yaml
+    relationships:
+      - type: dell.relationships.depends_on
+        target: verify_demo
+
+  # Optional: bridge this factory's line into a hub factory (a deployment of
+  # either IoT Smart Factory entry). Instantiated only when join_hub is true.
+  join_hub:
+    type: dell.nodes.ansible.Executor
+    capabilities:
+      scalable:
+        properties:
+          default_instances:
+            jmespath:
+              - 'length([?join_hub == `true`]) || `0`'
+              - [{"join_hub": { get_input: join_hub }}]
+    properties: &join_hub_properties
+      <<: *ansible_common_properties
+      playbook_path: iot_factory/playbooks/join_hub.yaml
+      run_data:
+        factory_site: { get_input: factory_site }
+        factory_line: { get_input: factory_line }
+        hub_host: { get_capability: [{ get_input: hub_deployment_id }, mqtt_host] }
+        hub_port: { get_capability: [{ get_input: hub_deployment_id }, bridge_port] }
+        hub_accepts_joins: { get_capability: [{ get_input: hub_deployment_id }, accepts_joins] }
+        hub_topic_root: { get_capability: [{ get_input: hub_deployment_id }, mqtt_topic_root] }
+        hub_username:
+          get_secret:
+            - { get_capability: [{ get_input: hub_deployment_id }, bridge_credentials] }
+            - username
+        hub_password:
+          get_secret:
+            - { get_capability: [{ get_input: hub_deployment_id }, bridge_credentials] }
+            - password
+      sensitive_keys:
+        - ansible_password
+        - hub_password
+    interfaces:
+      dell.interfaces.lifecycle:
+        stop:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *join_hub_properties
+            playbook_path: iot_factory/playbooks/leave_hub.yaml
+    relationships:
+      - type: dell.relationships.depends_on
+        target: verify_demo

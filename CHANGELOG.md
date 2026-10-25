@@ -8,6 +8,19 @@ Breaking: entry file names and catalog labels changed. Re-upload the
 blueprint and select the new entry file. Existing deployments are not
 affected.
 
+- Removed (breaking): consolidated to six entry points.
+  - `mqtt_nodered_example_for_DDPC.yaml` (`mqtt_nodered/`): superseded by the
+    IoT Smart Factory, which includes Mosquitto and Node-RED.
+  - `nginx_app_example_for_DDPC.yaml` (`nginx_app/`): replaced as the layered
+    example by `iot_factory_layered_for_DDPC.yaml`. It also depended on an
+    external install-script repository.
+  - `remote_host_example.yaml` (`remotehost/`): superseded by
+    `iot_factory_remote_host_example.yaml`.
+- Changed (breaking): `container_based_example_for_DDPC.yaml` is renamed to
+  `it_toolkit_compose_for_DDPC.yaml`, and `container_based/` to
+  `site_it_toolkit/`.
+- Changed (breaking): `iot_factory/outputs.yaml` is renamed to
+  `iot_factory/capabilities.yaml`.
 - Changed (breaking): `container_based` now deploys the **Site IT Toolkit**
   instead of Node-RED / InfluxDB / Grafana: a Gatus status page that checks
   the site uplink, its TLS certificate, the DNS resolver, a named key service
@@ -34,6 +47,18 @@ affected.
   Grafana dashboard. A preflight node refuses other OSes before changing
   anything. Uninstall reverts the host, including Docker when the blueprint
   installed it. Tested on Ubuntu 24.04 only.
+- Added: `iot_factory_vm_for_DDPC.yaml` (`vm/` + `iot_factory/ddpc_vm/`), the
+  IoT Smart Factory demo on a new Ubuntu 24.04 cloud-init VM that the
+  deployment creates on a DDPC Endpoint. The same playbooks run through the
+  Endpoint proxy (eo-proxy). Uninstall removes the VM.
+- Added: `iot_factory_layered_for_DDPC.yaml` (`iot_factory/ddpc_layered/`), the
+  IoT Smart Factory demo layered onto the VM of an existing simple_vm deployment
+  (Ubuntu 24.04), which it reads with `get_environment_capability`. The same
+  playbooks run through the Endpoint proxy (eo-proxy), so the VM doesn't need
+  to be reachable from the orchestrator. Uninstall runs the teardown playbooks
+  and leaves the VM. The remote-host inputs moved to
+  `iot_factory/remote_host_inputs.yaml` so both entries share
+  `iot_factory/inputs.yaml`.
 - Added (iot_factory): second fault per machine with build-up behaviour
   (`hydraulic_leak`, cumulative `tool_wear` and `misgrip`), line cascades
   (STARVED), runtime chaos mode that runs alongside manual faults, scenarios,

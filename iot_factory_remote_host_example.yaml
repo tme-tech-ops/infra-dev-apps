@@ -10,8 +10,9 @@ imports:
   - dell/types/types.yaml
   - plugin:ansible-plugin?version= >=4.1.9.0,<5.0.0.0
   - iot_factory/definitions.yaml
+  - iot_factory/remote_host_inputs.yaml
   - iot_factory/inputs.yaml
-  - iot_factory/outputs.yaml
+  - iot_factory/capabilities.yaml
 
 input_groups:
   remote_host:

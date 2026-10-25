@@ -1,9 +1,0 @@
-capabilities:
-
-  nginx_url:
-    description: NGINX web server URL
-    value: { concat: ['https://', { get_environment_capability: vm_ip }, ':', { get_input: nginx_port }] }
-
-  nginx_credentials_secret:
-    description: Name of the secret holding the NGINX basic authentication username and password
-    value: { get_input: nginx_credentials_secret }
