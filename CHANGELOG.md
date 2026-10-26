@@ -13,6 +13,10 @@ All notable changes to this blueprint are recorded here.
   `disk_controller` can no longer be changed by a deployment update. The
   edge-plugin never sends the image in a VM update, and the boot-disk
   controller of a running VM can't change.
+- Changed (simple_vm, iot_factory_vm): `vnic_0_segment_name` and
+  `vnic_1_segment_name` can no longer be changed by a deployment update. The
+  update completed but the VM stayed on its old segment, because the NIC list
+  is computed once at install.
 - Changed (iot_factory, all three entries): `ansible_debug_level`,
   `ansible_timeout` and `ansible_log_stdout` can no longer be changed by a
   deployment update. Every Ansible node reads them and has no update

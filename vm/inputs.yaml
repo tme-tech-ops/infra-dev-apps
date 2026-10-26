@@ -296,7 +296,9 @@ inputs:
   vnic_0_segment_name:
     type: string
     hidden: false
-    allow_update: true
+    # Not applied by a deployment update yet (the NIC list is computed
+    # once at install), so it stays locked until Day-2 support lands.
+    allow_update: false
     display_label: Virtual Network Segment name for Management Interface
     description: Name of the Virtual Network Segment.
     constraints:
@@ -457,7 +459,9 @@ inputs:
     type: string
     hidden: false
     only_with: add_second_nic
-    allow_update: true
+    # Not applied by a deployment update yet (the NIC list is computed
+    # once at install), so it stays locked until Day-2 support lands.
+    allow_update: false
     display_label: Second Virtual Network Segment name
     description: Name of the Virtual Network Segment.
     required: false

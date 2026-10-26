@@ -230,7 +230,7 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `vnic_0_segment_name` | Virtual Network Segment name for Management Interface | string | – | ✓ | Picked from the Endpoint's virtual network segments |
+| `vnic_0_segment_name` | Virtual Network Segment name for Management Interface | string | – | ✗ | Picked from the Endpoint's virtual network segments |
 | `use_dhcp` | Use DHCP | boolean | `true` | ✗ | Clear it to set a static IP |
 | `static_ip` | Static IP and CIDR prefix | string | – | ✗ | Hidden when `use_dhcp` is set; e.g. `192.168.0.100/24` |
 | `use_gateway` | Use Gateway | boolean | `false` | ✗ | Hidden when `use_dhcp` is set |
@@ -240,7 +240,7 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 | `use_nat` | Enable NAT Port Forwarding | boolean | `false` | ✗ | Shows the port-forward rules |
 | `port_forward_rules` | Port Mapping | list (`port_forward_rules`) | `[]` | ✗ | Only with `use_nat`; see [NAT port-forward rules](#nat-port-forward-rules) |
 | `add_second_nic` | Add Second NIC | boolean | `false` | ✗ | Shows the second-NIC inputs |
-| `vnic_1_segment_name` | Second Virtual Network Segment name | string | – | ✓ | Only with `add_second_nic` |
+| `vnic_1_segment_name` | Second Virtual Network Segment name | string | – | ✗ | Only with `add_second_nic` |
 | `use_dhcp2` | Use DHCP on second NIC | boolean | `true` | ✗ | Only with `add_second_nic` |
 | `static_ip2` | Static IP and CIDR prefix for second NIC | string | – | ✗ | Only with `add_second_nic`; hidden when `use_dhcp2` is set |
 | `use_dns2` | Use DNS on second NIC | boolean | `false` | ✗ | Only with `add_second_nic`; hidden when `use_dhcp2` is set |
