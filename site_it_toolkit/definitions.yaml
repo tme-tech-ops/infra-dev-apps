@@ -8,10 +8,29 @@ dsl_definitions:
       - get_inventory:
           get_environment_capability: ece_service_tag
 
+  # The compose environment. Compose environment values must be strings, so
+  # integer inputs are wrapped in concat.
+  toolkit_environment: &toolkit_environment
+    SITE_NAME: { get_input: site_name }
+    ALERT_TOPIC: { get_input: alert_topic }
+    WEB_CHECK_URL: { get_input: web_check_url }
+    DNS_CHECK_SERVER: { get_input: dns_check_server }
+    DNS_CHECK_NAME: { get_input: dns_check_name }
+    KEY_SERVICE_NAME: { get_input: key_service_name }
+    KEY_SERVICE_URL: { get_input: key_service_url }
+    CHECK_INTERVAL: { get_input: check_interval }
+    STATUS_PORT: { concat: [{ get_input: status_port }] }
+    ALERTS_PORT: { concat: [{ get_input: alerts_port }] }
+    SPEEDTEST_PORT: { concat: [{ get_input: speedtest_port }] }
+    TOOLBOX_PORT: { concat: [{ get_input: toolbox_port }] }
+    IMAGE_REGISTRY: { get_input: image_registry }
+    ENDPOINT_IP: *endpoint_ip
+
 node_templates:
 
   # Loads the compose file into a runtime property. Nothing is created
   # outside DAP, so there is nothing to undo on uninstall (no stop/delete).
+  # A deployment update re-reads it if a new blueprint revision changed it.
   prepare_compose_yaml:
     type: dell.nodes.Root
     interfaces:
@@ -19,6 +38,18 @@ node_templates:
         start:
           implementation: site_it_toolkit/scripts/prepare_compose_yaml.py
           executor: central_deployment_agent
+          inputs:
+            action: load
+        check_drift:
+          implementation: site_it_toolkit/scripts/prepare_compose_yaml.py
+          executor: central_deployment_agent
+          inputs:
+            action: check_drift
+        update:
+          implementation: site_it_toolkit/scripts/prepare_compose_yaml.py
+          executor: central_deployment_agent
+          inputs:
+            action: load
 
   # Instantiated only when registry_login_enabled is true. Use it with a
   # private registry or a pull-through cache set in Image Registry.
@@ -43,8 +74,7 @@ node_templates:
       - type: dell.relationships.depends_on
         target: prepare_compose_yaml
 
-  # Runs the Site IT Toolkit stack on the Endpoint. Compose environment
-  # values must be strings, so integer inputs are wrapped in concat.
+  # Runs the Site IT Toolkit stack on the Endpoint.
   nativeedge_compose:
     type: dell.nodes.nativeedge.template.NativeEdgeCompose
     properties:
@@ -53,21 +83,32 @@ node_templates:
         definition:
           name: { get_sys: [deployment, name] }
           compose: { get_attribute: [prepare_compose_yaml, compose_yaml] }
-          environment_variables:
-            SITE_NAME: { get_input: site_name }
-            ALERT_TOPIC: { get_input: alert_topic }
-            WEB_CHECK_URL: { get_input: web_check_url }
-            DNS_CHECK_SERVER: { get_input: dns_check_server }
-            DNS_CHECK_NAME: { get_input: dns_check_name }
-            KEY_SERVICE_NAME: { get_input: key_service_name }
-            KEY_SERVICE_URL: { get_input: key_service_url }
-            CHECK_INTERVAL: { get_input: check_interval }
-            STATUS_PORT: { concat: [{ get_input: status_port }] }
-            ALERTS_PORT: { concat: [{ get_input: alerts_port }] }
-            SPEEDTEST_PORT: { concat: [{ get_input: speedtest_port }] }
-            TOOLBOX_PORT: { concat: [{ get_input: toolbox_port }] }
-            IMAGE_REGISTRY: { get_input: image_registry }
-            ENDPOINT_IP: *endpoint_ip
+          environment_variables: *toolkit_environment
+    interfaces:
+      dell.interfaces.lifecycle:
+        # Day 2 (site_it_toolkit/scripts/toolkit_ops.py). The plugin's
+        # check_drift only compares containers and its update can't carry a
+        # new definition, so both are replaced: drift = the compose with the
+        # desired settings vs the one last sent, plus container state, and the
+        # update fails on purpose so the workflow recreates the stack (needs
+        # "Run automatic reinstall").
+        check_drift:
+          implementation: site_it_toolkit/scripts/toolkit_ops.py
+          executor: central_deployment_agent
+          inputs:
+            action: check_drift
+            compose_file: site_it_toolkit/compose/site_it_toolkit.yaml
+            environment: *toolkit_environment
+        update:
+          implementation: site_it_toolkit/scripts/toolkit_ops.py
+          executor: central_deployment_agent
+          inputs:
+            action: recreate_gate
+        postupdate:
+          implementation: site_it_toolkit/scripts/toolkit_ops.py
+          executor: central_deployment_agent
+          inputs:
+            action: postupdate
     relationships:
       - type: dell.relationships.depends_on
         target: prepare_compose_yaml

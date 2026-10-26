@@ -72,7 +72,7 @@ labels:
       - tme-tech-ops
   version:
     values:
-      - "5.0.0"
+      - "4.3.0"
 
 blueprint_labels:
   env:

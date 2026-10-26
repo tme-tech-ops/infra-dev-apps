@@ -2,7 +2,20 @@
 
 All notable changes to this blueprint are recorded here.
 
-## 4.2.0 - unreleased
+## 4.3.0 - unreleased
+
+- Added (it_toolkit_compose): deployment updates. Site Name, Alert Topic, the
+  health-check targets, Check Interval, the four ports and Image Registry can
+  now be changed. `nativeedge_compose` has a drift check
+  (`site_it_toolkit/scripts/toolkit_ops.py`): the compose with the desired
+  settings vs the one the plugin last sent, plus container state. Its update
+  fails on purpose so the workflow recreates the stack (check "Run automatic
+  reinstall"); the named volumes (status history, alert cache) are kept.
+  `prepare_compose_yaml` re-reads the compose file when a new blueprint
+  revision changes it. Same design as compose_app. The registry login inputs
+  stay fixed. See "Updating an it_toolkit_compose deployment" in the README.
+
+## 4.2.0 - 2026-10-26
 
 iot_factory (all three entries) gets deployment updates. simple_vm and
 iot_factory_vm get a VM drift check.

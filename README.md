@@ -20,6 +20,7 @@ Example blueprints for the **Dell Automation Platform (DAP)**, mainly targeting 
    - [iot_factory on a new DDPC VM](#iot_factory-on-a-new-ddpc-vm)
    - [iot_factory on a simple_vm deployment](#iot_factory-on-a-simple_vm-deployment)
 5. [it_toolkit_compose](#5-it_toolkit_compose)
+   - [Updating an it_toolkit_compose deployment](#updating-an-it_toolkit_compose-deployment)
 6. [compose_app](#6-compose_app)
 7. [Deploying and tearing down](#7-deploying-and-tearing-down)
 8. [Known issues and limitations](#8-known-issues-and-limitations)
@@ -661,7 +662,7 @@ Use it as a template for a fixed container stack that ships inside the blueprint
 
 ### Inputs
 
-All inputs are fixed after deployment (`allow_update: false`).
+The Site, Health Checks, Published Ports and Container Images inputs can be changed with a deployment update; see [Updating an it_toolkit_compose deployment](#updating-an-it_toolkit_compose-deployment). The Registry Login inputs are fixed after deployment.
 
 **Site**
 
@@ -721,11 +722,27 @@ Edit `site_it_toolkit/compose/site_it_toolkit.yaml` and re-upload the blueprint:
 
 Defined in `site_it_toolkit/definitions.yaml`:
 
-1. **`prepare_compose_yaml`**: its `start` operation runs `site_it_toolkit/scripts/prepare_compose_yaml.py`, which downloads `compose/site_it_toolkit.yaml` from the blueprint package and stores the contents as the `compose_yaml` runtime property. It fails if the file is missing.
+1. **`prepare_compose_yaml`**: its `start` operation runs `site_it_toolkit/scripts/prepare_compose_yaml.py`, which downloads `compose/site_it_toolkit.yaml` from the blueprint package and stores the contents as the `compose_yaml` runtime property. It fails if the file is missing. On a deployment update, `check_drift` compares the file in the new blueprint revision with the stored copy and `update` re-reads it.
 2. **`registry_login`** (edge `RegistryLogin`): instance count is 1 when `registry_login_enabled` is true and 0 otherwise. It logs the Endpoint in to `registry_url` with the username and password from the secret, verifying the registry certificate unless `registry_tls_verify` is false. It depends on `prepare_compose_yaml`.
-3. **`nativeedge_compose`** (edge `NativeEdgeCompose`): sends the definition to the Endpoint found with `get_environment_capability: ece_service_tag`, with the inputs as compose environment variables. Integer ports are turned into strings with `concat`, because the plugin only accepts string values. `ENDPOINT_IP` is read from the Endpoint inventory. It depends on `prepare_compose_yaml` and `registry_login`.
+3. **`nativeedge_compose`** (edge `NativeEdgeCompose`): sends the definition to the Endpoint found with `get_environment_capability: ece_service_tag`, with the inputs as compose environment variables. Integer ports are turned into strings with `concat`, because the plugin only accepts string values. `ENDPOINT_IP` is read from the Endpoint inventory. It depends on `prepare_compose_yaml` and `registry_login`. Its `check_drift`, `update` and `postupdate` are replaced by `site_it_toolkit/scripts/toolkit_ops.py` (see below).
 
 **Uninstall** removes the containers. The registry login (Endpoint-wide) and the named volumes (`gatus_config`, `gatus_data`, `ntfy_cache`) are **not** reverted; a later deployment with the same name reattaches the status history.
+
+### Updating an it_toolkit_compose deployment
+
+Change the Site, Health Checks, Published Ports or Container Images inputs with **Update Deployment**:
+
+- In **Advanced**, check **Run automatic reinstall**. The DDPC Compute Service can't change a running compose, so the update recreates the stack. With the default (unchecked) the update stops with `re-installation is disabled by skip_reinstall`, and the stack keeps its old settings.
+- Leave **Skip drift check** unchecked: the drift check decides whether anything needs to change.
+- The `update` task of `nativeedge_compose` is *expected* to log a failure (`EXPECTED: the DDPC Compute Service has no in-place compose update…`); that is what triggers the recreate.
+
+How it works (`site_it_toolkit/scripts/toolkit_ops.py`): `check_drift` substitutes the desired settings into the compose file and compares the result with the compose the plugin last sent, and checks that the stack's containers are still running. No difference: nothing happens (about 30 s). A difference: the stack is deleted and created again with the new settings, which takes about 2 minutes. The status page is briefly down.
+
+**What survives a recreate:** the named volumes `gatus_data` (status history) and `ntfy_cache` (alert cache), so history and recent alerts are kept. `gatus_config` is rewritten from the new settings within 30 s.
+
+A new blueprint revision that changes `compose/site_it_toolkit.yaml` (for example a newer image tag) is applied the same way: update the deployment to the new revision with **Run automatic reinstall** checked.
+
+Tested (2026-10-26): no change (no recreate), site name, status port, a revision with a changed compose file, and the first update after upgrading from 4.2 (no drift, no recreate).
 
 ### Capabilities
 
@@ -865,7 +882,7 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 - **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. The login wiring in it_toolkit_compose and compose_app will work unchanged once the platform is fixed.
 - **SSH host keys are not verified** by iot_factory (`StrictHostKeyChecking=no`), on either entry. To harden this, pin the host key in a `known_hosts` file and pass it with `ansible_ssh_common_args`.
 - **iot_factory is tested only on Ubuntu 24.04 LTS** and refuses other systems at preflight. It needs internet access (Docker apt repo, Docker Hub); there is no air-gapped mode yet. Changing `stack_admin_credentials` after the first install updates Node-RED, Grafana's login file and MQTT, but not the InfluxDB or Grafana admin passwords already stored in their databases.
-- **Day-2:** compose_app, simple_vm and the three iot_factory entries support deployment updates; see [Updating a simple_vm deployment](#updating-a-simple_vm-deployment) and [Updating an iot_factory deployment](#updating-an-iot_factory-deployment). it_toolkit_compose supports install and uninstall only.
+- **Day-2:** every entry point supports deployment updates; see [Updating a simple_vm deployment](#updating-a-simple_vm-deployment), [Updating an iot_factory deployment](#updating-an-iot_factory-deployment), [Updating an it_toolkit_compose deployment](#updating-an-it_toolkit_compose-deployment) and compose_app's [Day-2 updates](#day-2-updates). The compose entries need **Run automatic reinstall** checked; the VM entries need it unchecked.
 - **Shared SSH key:** all simple_vm and iot_factory DDPC VM deployments share the `example_key` key pair. To give a copy its own key, change `key_name` in `vm/definitions.yaml`.
 - **Fixed interface names:** the netplan template, `pin-nic-names` and `get_vm_info.sh` assume the Ubuntu cloud-image names `enp1s0`, `enp2s0`, `enp3s0`. Images that name NICs differently need them updated; `pin-nic-names` then keeps the original netplan, so the VM still works but isn't pinned.
 
