@@ -5,7 +5,7 @@ inputs:
   site_name:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Site Name
     description: |
       Name of the branch or edge site. Shown in the status page title and in
@@ -21,7 +21,7 @@ inputs:
   alert_topic:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Alert Topic
     description: |
       ntfy topic the status page publishes alerts to. Subscribe to it in a
@@ -41,7 +41,7 @@ inputs:
   web_check_url:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Internet Check URL
     description: |
       HTTPS URL checked to confirm the site's internet uplink. Its TLS
@@ -58,7 +58,7 @@ inputs:
   dns_check_server:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: DNS Server
     description: |
       IPv4 address of the DNS server the site relies on. Set it to the site's
@@ -74,7 +74,7 @@ inputs:
   dns_check_name:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: DNS Test Name
     description: |
       Host name the DNS check resolves (A record), e.g. an internal server
@@ -90,7 +90,7 @@ inputs:
   key_service_name:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Key Service Name
     description: |
       Display name of one more service the site depends on, e.g. File Server,
@@ -106,7 +106,7 @@ inputs:
   key_service_url:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Key Service Address
     description: |
       Address of the key service. The check passes when a connection can be
@@ -125,7 +125,7 @@ inputs:
   check_interval:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Check Interval
     description: |
       How often the uplink, DNS and key service checks run. An alert is sent
@@ -143,7 +143,7 @@ inputs:
   status_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Status Page Port
     description: |
       Endpoint port for the Gatus status page.
@@ -158,7 +158,7 @@ inputs:
   alerts_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Alerts Port
     description: |
       Endpoint port for the ntfy alerts server (web app and phone-app server
@@ -174,7 +174,7 @@ inputs:
   speedtest_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Speed Test Port
     description: |
       Endpoint port for the OpenSpeedTest LAN speed test.
@@ -189,7 +189,7 @@ inputs:
   toolbox_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: IT Tools Port
     description: |
       Endpoint port for the IT-Tools toolbox.
@@ -206,7 +206,7 @@ inputs:
   image_registry:
     type: string
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Image Registry
     description: |
       Registry the images are pulled from, without a scheme. The default is
@@ -226,6 +226,8 @@ inputs:
   registry_login_enabled:
     type: boolean
     hidden: false
+    # RegistryLogin has no update operation (and on EdgeOS 4.3 the login
+    # is not applied anyway), so the registry login is set at install.
     allow_update: false
     display_label: Registry Login
     description: |
