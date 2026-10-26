@@ -827,6 +827,8 @@ Defined in `compose_app/definitions.yaml`. The desired-state inputs are collecte
 - In **Update Deployment → Advanced**, check **Run automatic reinstall**. The default (unchecked) sends `skip_reinstall: true`, so the update fails with `re-installation is disabled by skip_reinstall` and the containers are left unchanged.
 - Leave **Skip drift check** unchecked; the drift check is what detects the change.
 - Check **Force update** only when the previous update on the deployment failed.
+- **A failed update still saves the new input values.** After an invalid definition is rejected, the deployment shows the invalid text while the stack keeps running the old one. Fix the definition in the next update (with **Force update**).
+- **If a stack is gone after a failed update** (for example an image tag that can't be pulled: the old stack is deleted before the new one fails to start), fix the inputs and run an update with **Force update**. If the stack still isn't back, run the **Install** workflow on the deployment: it creates the missing stack and leaves the rest as it is.
 - Leave the other options at their defaults (Run install / uninstall workflow checked, everything else unchecked).
 - The `update` task of `nativeedge_compose` is *expected* to log a failure; that is what triggers the recreate.
 - A no-change update repairs container drift.

@@ -519,12 +519,17 @@ def do_check_drift_compose():
     applied = _applied_compose()
     lines, before, after = [], applied or "", substituted
 
+    if errors:
+        # Report nothing, not even container drift: drift here would run the
+        # recreate gate, which fails on the invalid definition, and with
+        # automatic reinstall on the orchestrator then deletes the running stack
+        # and cannot create it again. compose_definition's update fails instead.
+        ctx.logger.warning("nativeedge_compose: desired definition is INVALID; not reporting drift so the "
+                           "running stack is left untouched (compose_definition update will fail)")
+        ctx.returns(None)
+        return
     if applied is not None and sha256(substituted) != sha256(applied):
-        if errors:
-            ctx.logger.warning("nativeedge_compose: desired definition changed but is INVALID; not reporting "
-                               "drift so the running stack is left untouched (compose_definition update will fail)")
-        else:
-            lines.append("# definition changed")
+        lines.append("# definition changed")
     else:
         before = after = ""
 
