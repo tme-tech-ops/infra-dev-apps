@@ -6,7 +6,9 @@ inputs:
   os_image_secret:
     type: secret_key
     hidden: false
-    allow_update: true
+    # The edge-plugin never sends the image in a VM update, so the OS of a
+    # running VM can't change.
+    allow_update: false
     display_label: OS Image Secret for Virtual Machine creation
     description: |
       Secret containing url, username, access_token, and 
@@ -490,7 +492,11 @@ inputs:
     type: string
     hidden: false
     allow_update: false
-    exclusive_with: use_dhcp2 
+    # use_dhcp2 is stored as null when there is no second NIC, and
+    # exclusive_with treats null as false. only_with keeps this input hidden
+    # (and unvalidated) in the update form in that case.
+    only_with: add_second_nic
+    exclusive_with: use_dhcp2
     display_label: Static IP and CIDR prefix for second NIC
     description: |
       Static IP Address and CIDR that will be assigned to the VM 
@@ -509,7 +515,11 @@ inputs:
     type: boolean
     hidden: false
     allow_update: false
-    exclusive_with: use_dhcp2 
+    # use_dhcp2 is stored as null when there is no second NIC, and
+    # exclusive_with treats null as false. only_with keeps this input hidden
+    # (and unvalidated) in the update form in that case.
+    only_with: add_second_nic
+    exclusive_with: use_dhcp2
     display_label: Use DNS on second NIC
     description: |
       If false, then static ip, dns, and gateway must be configured.
@@ -661,7 +671,8 @@ inputs:
   disk_controller:
     type: string
     display_label: Disk controller
-    allow_update: true
+    # Changing the boot-disk controller of a running VM is not supported.
+    allow_update: false
     description: >
       Deployment disk controller.
     default: VIRTIO

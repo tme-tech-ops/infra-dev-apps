@@ -201,7 +201,7 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `os_image_secret` | OS Image Secret for Virtual Machine creation | secret_key | – | ✓ | Schema `binary_configuration` |
+| `os_image_secret` | OS Image Secret for Virtual Machine creation | secret_key | – | ✗ | Schema `binary_configuration`. The OS of a running VM can't change. |
 
 **DDPC Virtual Machine**
 
@@ -242,8 +242,8 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 | `add_second_nic` | Add Second NIC | boolean | `false` | ✗ | Shows the second-NIC inputs |
 | `vnic_1_segment_name` | Second Virtual Network Segment name | string | – | ✓ | Only with `add_second_nic` |
 | `use_dhcp2` | Use DHCP on second NIC | boolean | `true` | ✗ | Only with `add_second_nic` |
-| `static_ip2` | Static IP and CIDR prefix for second NIC | string | – | ✗ | Hidden when `use_dhcp2` is set |
-| `use_dns2` | Use DNS on second NIC | boolean | `false` | ✗ | Hidden when `use_dhcp2` is set |
+| `static_ip2` | Static IP and CIDR prefix for second NIC | string | – | ✗ | Only with `add_second_nic`; hidden when `use_dhcp2` is set |
+| `use_dns2` | Use DNS on second NIC | boolean | `false` | ✗ | Only with `add_second_nic`; hidden when `use_dhcp2` is set |
 | `dns2` | DNS Servers for second NIC | list | `[]` | ✗ | Only with `use_dns2` |
 | `use_nat2` | Enable NAT Port Forwarding on second NIC | boolean | `false` | ✗ | Only with `add_second_nic` |
 | `port_forward_rules2` | Port Mapping2 | list (`port_forward_rules`) | `[]` | ✗ | Only with `use_nat2` |
@@ -257,7 +257,7 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 | `hardware_options.vTPM` | boolean | `false` | Required for Windows 11 |
 | `hardware_options.secure_boot` | boolean | `false` | Required for Windows 11 |
 | `hardware_options.firmware_type` | string | `BIOS` | `BIOS` or `UEFI` (UEFI for Windows 11) |
-| `disk_controller` | string | `VIRTIO` | `VIRTIO`, `SATA` or `SCSI` |
+| `disk_controller` | string | `VIRTIO` | `VIRTIO`, `SATA` or `SCSI`. Can't be changed by a deployment update. |
 | `disk` | string | `disk_wrapper` | Datastore path passed to the VM |
 | `enable_management` | boolean | `true` | Creates the management tap interface that the eo-proxy uses |
 | `cloudinit` | string | `""` | Extra cloud-config merged into the generated one |
@@ -471,9 +471,9 @@ The credentials never appear in compose files or environment variables. They are
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✓ | 0–3. Raise only to troubleshoot. |
-| `ansible_timeout` | Ansible Timeout | integer | `30` | ✓ | SSH connection timeout, 10–600 s |
-| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✓ | One line per task in the deployment log. Failures are always logged. |
+| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✗ | 0–3. Raise only to troubleshoot. |
+| `ansible_timeout` | Ansible Timeout | integer | `30` | ✗ | SSH connection timeout, 10–600 s |
+| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✗ | One line per task in the deployment log. Failures are always logged. |
 
 ### Node template step-through
 
