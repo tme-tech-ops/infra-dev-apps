@@ -40,6 +40,7 @@ input_groups:
       - memory_size
       - os_disk_size
       - disk_wrapper
+      - additional_disks
   device_passthrough:
     display_label: Device Passthrough
     collapsible: true
@@ -126,7 +127,7 @@ labels:
       - tme-tech-ops
   version:
     values:
-      - "4.0.1"
+      - "4.1.0"
 
 blueprint_labels:
   env:

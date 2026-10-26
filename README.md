@@ -14,6 +14,7 @@ Example blueprints for the **Dell Automation Platform (DAP)**, mainly targeting 
    - [Prerequisites](#prerequisites)
    - [Creating secrets](#creating-secrets)
 3. [simple_vm](#3-simple_vm)
+   - [Updating a simple_vm deployment](#updating-a-simple_vm-deployment)
 4. [iot_factory](#4-iot_factory)
    - [iot_factory on a new DDPC VM](#iot_factory-on-a-new-ddpc-vm)
    - [iot_factory on a simple_vm deployment](#iot_factory-on-a-simple_vm-deployment)
@@ -182,7 +183,7 @@ SSH Private Key Schema: <contents of id_rsa>
 
 ### Description
 
-Creates an Ubuntu VM on a DDPC Endpoint with cloud-init, from the cloud image in the OS Image Secret (22.04 and 24.04 are tested). It sets up a sudo user with password and SSH-key login, configures one or two NICs, and can pass Endpoint devices through. When the VM is up, the deployment returns the details needed to log in. Its `vm/` component is reused by the [iot_factory DDPC VM entry](#iot_factory-on-a-new-ddpc-vm), and it is the base that the [layered iot_factory](#iot_factory-on-a-simple_vm-deployment) layers onto.
+Creates an Ubuntu VM on a DDPC Endpoint with cloud-init, from the cloud image in the OS Image Secret (22.04 and 24.04 are tested). It sets up a sudo user with password and SSH-key login, configures one or two NICs, can add empty data disks, and can pass Endpoint devices through. CPU, memory, disks, NICs, NAT rules and USB passthrough can be changed later with a deployment update ([details](#updating-a-simple_vm-deployment)). When the VM is up, the deployment returns the details needed to log in. Its `vm/` component is reused by the [iot_factory DDPC VM entry](#iot_factory-on-a-new-ddpc-vm), and it is the base that the [layered iot_factory](#iot_factory-on-a-simple_vm-deployment) layers onto.
 
 Use it as a template for any VM-based workload on DDPC.
 
@@ -212,15 +213,16 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 | `vm_password` | VM Password | secret_key | – | ✗ | Schema `password` |
 | `vcpus` | vCPUs | integer | `2` | ✓ | At least 2 |
 | `memory_size` | Memory Size | string | `4GB` | ✓ | Number + unit (`KB` … `YB`) |
-| `os_disk_size` | OS Disk Size | string | `50GB` | ✓ | Number + unit (`KB` … `YB`) |
+| `os_disk_size` | OS Disk Size | string | `50GB` | ✓ | Number + unit (`KB` … `YB`). Grow only. |
 | `disk_wrapper` | Endpoint Datastore Path | string | – | ✗ | Picked from the Endpoint's datastores |
+| `additional_disks` | Additional Disks | list (`additional_disk`) | `[]` | ✓ | Empty data disks; see [Additional disks](#additional-disks) |
 
 **Device Passthrough**
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `use_passthrough` | Enable device passthrough | boolean | `false` | ✗ | Shows the device lists below |
-| `usb` | USB Device list | list (string) | `[]` | ✗ | Only with `use_passthrough`; picked from the Endpoint's USB devices |
+| `use_passthrough` | Enable device passthrough | boolean | `false` | ✓ | Shows the device lists below |
+| `usb` | USB Device list | list (string) | `[]` | ✓ | Only with `use_passthrough`; picked from the Endpoint's USB devices |
 | `serial_port_wrapper` | Serial Port | list (string) | `[]` | ✗ | Only with `use_passthrough`; picked from the Endpoint's serial ports |
 | `gpu` | GPU Passthrough | list (string) | `[]` | ✗ | Only with `use_passthrough`; picked from the Endpoint's GPUs |
 | `video` | Video Passthrough | list (string) | `[]` | ✗ | Only with `use_passthrough`; `onboard controller` |
@@ -230,23 +232,23 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `vnic_0_segment_name` | Virtual Network Segment name for Management Interface | string | – | ✗ | Picked from the Endpoint's virtual network segments |
+| `vnic_0_segment_name` | Virtual Network Segment name for Management Interface | string | – | ✓ | Picked from the Endpoint's virtual network segments |
 | `use_dhcp` | Use DHCP | boolean | `true` | ✗ | Clear it to set a static IP |
 | `static_ip` | Static IP and CIDR prefix | string | – | ✗ | Hidden when `use_dhcp` is set; e.g. `192.168.0.100/24` |
 | `use_gateway` | Use Gateway | boolean | `false` | ✗ | Hidden when `use_dhcp` is set |
 | `gateway` | Gateway IP | string | – | ✗ | Only with `use_gateway`; IPv4 |
 | `use_dns` | Use DNS | boolean | `false` | ✗ | Hidden when `use_dhcp` is set |
 | `dns` | DNS Servers | list | `[]` | ✗ | Only with `use_dns` |
-| `use_nat` | Enable NAT Port Forwarding | boolean | `false` | ✗ | Shows the port-forward rules |
-| `port_forward_rules` | Port Mapping | list (`port_forward_rules`) | `[]` | ✗ | Only with `use_nat`; see [NAT port-forward rules](#nat-port-forward-rules) |
-| `add_second_nic` | Add Second NIC | boolean | `false` | ✗ | Shows the second-NIC inputs |
-| `vnic_1_segment_name` | Second Virtual Network Segment name | string | – | ✗ | Only with `add_second_nic` |
-| `use_dhcp2` | Use DHCP on second NIC | boolean | `true` | ✗ | Only with `add_second_nic` |
+| `use_nat` | Enable NAT Port Forwarding | boolean | `false` | ✓ | Shows the port-forward rules |
+| `port_forward_rules` | Port Mapping | list (`port_forward_rules`) | `[]` | ✓ | Only with `use_nat`; see [NAT port-forward rules](#nat-port-forward-rules) |
+| `add_second_nic` | Add Second NIC | boolean | `false` | ✓ | Shows the second-NIC inputs. Adding NIC 2 by an update: see [Updating](#updating-a-simple_vm-deployment). |
+| `vnic_1_segment_name` | Second Virtual Network Segment name | string | – | ✓ | Only with `add_second_nic` |
+| `use_dhcp2` | Use DHCP on second NIC | boolean | `true` | ✓ | Only with `add_second_nic`. A NIC added by an update always uses DHCP. |
 | `static_ip2` | Static IP and CIDR prefix for second NIC | string | – | ✗ | Only with `add_second_nic`; hidden when `use_dhcp2` is set |
 | `use_dns2` | Use DNS on second NIC | boolean | `false` | ✗ | Only with `add_second_nic`; hidden when `use_dhcp2` is set |
 | `dns2` | DNS Servers for second NIC | list | `[]` | ✗ | Only with `use_dns2` |
-| `use_nat2` | Enable NAT Port Forwarding on second NIC | boolean | `false` | ✗ | Only with `add_second_nic` |
-| `port_forward_rules2` | Port Mapping2 | list (`port_forward_rules`) | `[]` | ✗ | Only with `use_nat2` |
+| `use_nat2` | Enable NAT Port Forwarding on second NIC | boolean | `false` | ✓ | Only with `add_second_nic` |
+| `port_forward_rules2` | Port Mapping2 | list (`port_forward_rules`) | `[]` | ✓ | Only with `use_nat2` |
 
 <details>
 <summary><b>Hidden (advanced) inputs</b>: set <code>hidden: false</code> in <code>vm/inputs.yaml</code> and add the input to an <code>input_groups</code> entry to show it in the UI</summary>
@@ -262,8 +264,7 @@ A dash in **Default** means the input is required. **Upd** shows whether the inp
 | `enable_management` | boolean | `true` | Creates the management tap interface that the eo-proxy uses |
 | `cloudinit` | string | `""` | Extra cloud-config merged into the generated one |
 | `iso_files` | list (string) | `[]` | Catalog ISO files to attach |
-| `additional_disks` | list | `[]` | Catalog disks to attach |
-| `boot_order` | list (string) | `[]` | VM boot order |
+| `boot_order` | list (string) | `[]` | VM boot order: `hd`, `cdrom`, `network` (others are refused) |
 | `serial_port` | list (string) | `serial_port_wrapper` | Serial-port list passed to the VM |
 | `binary_image_url` | string | from `os_image_secret` | Image URL |
 | `binary_image_access_user` | string | from `os_image_secret` | Image repository user |
@@ -284,7 +285,20 @@ Each `port_forward_rules` entry has these fields:
 | `vm_port` | The application's port inside the VM |
 | `vm_ip` | Leave blank with DHCP; set it only with a static IP |
 
-A NAT-type virtual network segment must be selected for the rules to apply.
+A NAT-type virtual network segment must be selected for the rules to apply. The rules are sent only while `use_nat` (or `use_nat2`) is checked.
+
+#### Additional disks
+
+Each `additional_disks` entry is an empty disk created on the Endpoint:
+
+| Field | Notes |
+|---|---|
+| `name` | Unique within the VM, e.g. `data1` |
+| `storage` | Size, a whole number |
+| `storage_unit` | `GB` (default), `MB` or `TB` |
+| `disk` | Datastore path, e.g. `/DataStore0` (default) |
+
+The guest sees them as raw disks (`vdb`, `vdc`, …) in the order listed. Nothing partitions, formats or mounts them: do that in the guest (or in a layered blueprint), and mount by UUID rather than device name.
 
 ### Node template step-through
 
@@ -293,17 +307,64 @@ Defined in `vm/definitions.yaml`, in execution order:
 1. **`ssh_keys`** (`dell.nodes.keys.RSAKey`): creates an OpenSSH RSA key pair and stores it as the `example_key_private` / `example_key_public` secrets. If they already exist, it reuses them.
 2. **`binary_image`** (edge `BinaryImage`): validates the image settings read from `os_image_secret` (the access token is read straight from the secret), then uploads the image to the Endpoint. Uninstall deletes it.
 3. **`prepare_config`** (script operations on the deployment agent):
-   - `precreate` → `prepare_network_settings.py` builds the NIC list from the segment names and NAT rules.
    - `create` → `prepare_serial_ports.py` converts the selected serial ports to the VM port format.
    - `start` → `prepare_passwd.py` reads `vm_password` and stores a bcrypt hash.
-4. **`cloudinit`** (`dell.nodes.CloudInit.CloudConfig`): `precreate` renders `vm/templates/netplan_config.yaml` from the network inputs (`prepare_netplan_config.py`). `create` builds the cloud-config: hostname, the netplan file, an SSH keep-alive, the sudo user with the hashed password and the generated public key, plus any extra `cloudinit` input. It depends on `ssh_keys` and `prepare_config`.
-5. **`vm`** (edge `NativeEdgeVM`): creates the VM on the Endpoint from `get_environment_capability: ece_service_tag`. It uses the uploaded image, CPU/memory/disk, hardware options, network settings, passthrough devices and the cloud-config. The VM is named after the deployment. It depends on `cloudinit`, `binary_image` and `prepare_config`.
+4. **`cloudinit`** (`dell.nodes.CloudInit.CloudConfig`): `precreate` renders `vm/templates/netplan_config.yaml` from the network inputs (`prepare_netplan_config.py`), twice: once by kernel NIC name and once pinned to MAC addresses, plus the first-boot script `vm/templates/pin_nic_names.sh`. `create` builds the cloud-config: hostname, the netplan files, the pinning script (see [Stable NIC names](#stable-nic-names)), a DHCP fallback for NICs added later, an SSH keep-alive, the sudo user with the hashed password and the generated public key, plus any extra `cloudinit` input. It depends on `ssh_keys` and `prepare_config`.
+5. **`vm`** (edge `NativeEdgeVM`): creates the VM on the Endpoint from `get_environment_capability: ece_service_tag`. It uses the uploaded image, CPU/memory/disk, additional disks, hardware options, passthrough devices and the cloud-config. The NIC list (`network_settings`) is built from the network inputs in the node's own properties, so a deployment update sends the new segments and NAT rules. The VM is named after the deployment. It depends on `cloudinit`, `binary_image` and `prepare_config`.
+   - On a deployment update the edge-plugin's `check_drift` / `update_config` / `update_apply` change the VM, and `update_postapply` → `vm_postupdate.py` reads the VM record back and fails the update if the vCPUs, memory, disks or NIC segments don't match what was sent.
 6. **`vm_info`**:
    - `create` → `get_target_id.py` resolves the Endpoint and stores the eo-proxy `connection_proxy_settings`.
-   - `start` → Fabric runs `get_vm_info.sh` in the VM over that proxy (using the generated key). It waits for an IPv4 address on `enp1s0` and publishes it as `vm_public_ip`.
+   - `start` → Fabric runs `get_vm_info.sh` in the VM over that proxy (using the generated key). It waits for an IPv4 address on the first NIC (`data0`, or `enp1s0` on VMs created before 4.1.0) and publishes it as `vm_public_ip`.
    - `preupdate` / `update` repeat these steps, so a deployment update refreshes the IP.
 
 **Uninstall** deletes the VM and the uploaded image. The generated key secrets are kept so that other deployments can reuse them.
+
+#### Stable NIC names
+
+Cloud-init writes a netplan that matches NICs by kernel name (`enp1s0`, `enp2s0`, …). If a NIC is added later, the kernel names shift and the management NIC (used by the Endpoint proxy) can take a data NIC's name and lose its configuration. To prevent this, `pin-nic-names` runs once at first boot, before `netplan apply`:
+
+- It checks that the NICs present match the install-time layout (`enp1s0` = first NIC, `enp2s0` = second NIC if any, then management).
+- It installs a netplan that matches each NIC by MAC and renames it to a role name: `data0`, `data1`, `mgmt0`.
+- It disables cloud-init's network config so the pinned netplan stays.
+- If anything doesn't match, it keeps the original netplan and logs why (`journalctl -t pin-nic-names`).
+
+A NIC added later keeps a kernel name (`enp2s0`, …), which can't collide with the role names, and gets a DHCP address from `/etc/systemd/network/99-added-nics.network` (no default route).
+
+### Updating a simple_vm deployment
+
+Use **Update Deployment** and change only the inputs marked ✓ in the tables above. Every change below was tested on Ubuntu 24.04.
+
+| Change | Result | VM reboots |
+|---|---|---|
+| vCPUs, memory (up or down) | Applied | Yes |
+| OS disk size (grow) | Applied; the root filesystem grows at boot | Yes |
+| OS disk size (shrink) | **Refused** by the platform; the update fails and the VM is unchanged | No |
+| NIC 1 or NIC 2 segment | Applied; same MAC, new DHCP address on the new segment. `vm_ip` is refreshed. | Yes |
+| Add NIC 2 | Applied; the new NIC gets DHCP (see the note below) | Yes |
+| Remove NIC 2 | Applied | Yes |
+| NAT port-forward rules (add, change, remove) | Applied on the Endpoint | Yes |
+| USB passthrough (add, remove) | Applied; the Endpoint shows the port as claimed by the VM | Yes |
+| Additional disk: add | Applied (format and mount the new disk yourself) | Usually no: attached live in the 4.1.0 test (an earlier test rebooted) |
+| Additional disk: grow | Applied; grow the partition/filesystem in the guest | Yes |
+| Additional disk: remove | Applied; **the disk and its data are deleted** | No |
+| No change | Nothing happens (but see the note on stuck updates below) | No |
+
+The other inputs are locked (greyed out): the OS image, hostname, user and password, the datastore, IP/DNS/gateway settings (applied by cloud-init at install only), and GPU, video, PCIe and serial passthrough (not tested).
+
+**Update options**
+
+- **Leave "Run automatic reinstall" unchecked.** With it checked, a change the platform refuses (such as a disk shrink) makes the orchestrator reinstall the VM, which deletes it and its disks and creates a new one. (compose_app is the opposite: it needs it checked.)
+- **Check "Force update"** if the deployment has a layered child (for example iot_factory layered). Without it the update is rejected with "existing installations depend on it". The child keeps running; its containers restart on their own after the VM reboots.
+- Leave **Skip drift check** unchecked.
+
+**Things to know**
+
+- **Almost every applied change reboots the VM** (an update takes about 1.5 minutes; only adding or removing an additional disk is done live). Plan for the downtime, including for layered apps.
+- **A failed update still saves the new input values.** The deployment then shows values the VM doesn't have, and every later update sends them again. Run another update with the values the VM really has (with **Force update**) to bring them back in line.
+- **Adding NIC 2 to a VM created before 4.1.0 cuts off the VM's management connection.** Those VMs don't pin their NIC names (see [Stable NIC names](#stable-nic-names)): the new NIC takes the management NIC's name, and the Endpoint proxy (and anything layered that uses it) can no longer reach the VM. Removing NIC 2 again restores it. Changing an existing NIC 2's segment is safe on any VM.
+- **An update that changes nothing on the VM can get stuck.** Occasionally the Endpoint never reports such an update as finished, and the `vm` node keeps logging `Update deployment is not done yet` for up to an hour before failing. If that goes on for more than about 10 minutes, cancel the execution (**Executions → Cancel**). The VM is not affected. Don't wait it out with "Run automatic reinstall" checked, because a failed VM update then recreates the VM.
+- **A NIC added by an update uses DHCP.** The static IP and DNS inputs for NIC 2 apply only when NIC 2 is created at install.
+- **Updating a 4.0.x deployment to the 4.1.0 blueprint** reboots the VM once, because the NIC list is now sent with the NIC model set explicitly.
 
 ### Capabilities
 
@@ -312,7 +373,7 @@ Defined in `vm/definitions.yaml`, in execution order:
 | `service_tag` | Endpoint service tag |
 | `vm_name` | VM name (the deployment name) |
 | `vm_hostname` | `vm_hostname` input |
-| `vm_ip` | VM IPv4 address on `enp1s0` |
+| `vm_ip` | VM IPv4 address on the first NIC |
 | `vm_user_name` | `vm_user_name` input |
 | `vm_ssh_private_key` | Name of the private-key secret (`example_key_private`) |
 
@@ -526,6 +587,7 @@ The same demo in one deployment: it creates the **simple_vm** VM (cloud-init, ge
 - **Inputs:** the simple_vm inputs (artifact, VM, device passthrough, network) plus the iot_factory inputs, minus the four remote-host inputs. **`os_image_secret` must point to an Ubuntu 24.04 cloud image**, or preflight stops the deployment. The VM defaults (2 vCPUs, 4 GB RAM, 50 GB disk) are enough. Use 4 vCPUs and 8 GB for a hub with several joined factories.
 - **Network:** the services are published on the VM's first NIC, and the capabilities use that IP (`vm_ip`). Choose a **bridged** segment with DHCP or a static IP on a network your browser can reach. On a NAT segment the capabilities show the VM's private address: add port-forward rules for the service ports and use the Endpoint's host IP instead. The VM needs internet access (Docker apt repo, Docker Hub).
 - **Nodes:** `ssh_keys` → `binary_image` → `prepare_config` → `cloudinit` → `vm` → `vm_info` (proxy target and VM IP), then `preflight` → `install_docker` → `deploy_stack` → `verify_demo` (→ `accept_joins` / `join_hub`), defined in `iot_factory/ddpc_vm/definitions.yaml`. `ANSIBLE_SSH_RETRIES` is set to 10: each eo-proxy session is published as a new cluster service whose DNS name takes a minute or two to resolve, and without SSH retries every node's first connection fails as unreachable.
+- **Updates:** the VM inputs can be changed as for [simple_vm](#updating-a-simple_vm-deployment) (the VM reboots, and the stack comes back on its own). The iot_factory inputs are not updatable yet.
 - **Uninstall** deletes the VM (and the uploaded image), which removes Docker, the stack and any bridge, so this entry has no teardown playbooks.
 - **Capabilities:** the iot_factory capabilities with `<remote_host>` replaced by the VM IP, plus the simple_vm capabilities (`service_tag`, `vm_name`, `vm_ip`, `vm_user_name`, `vm_ssh_private_key`, …).
 - **Upload size:** as above, upload this entry with only its own files (`iot_factory_vm_for_DDPC.yaml`, `vm/`, `iot_factory/`, `CHANGELOG.md`) to keep the per-node playbook download short.
@@ -785,9 +847,9 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 - **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. The login wiring in it_toolkit_compose and compose_app will work unchanged once the platform is fixed.
 - **SSH host keys are not verified** by iot_factory (`StrictHostKeyChecking=no`), on either entry. To harden this, pin the host key in a `known_hosts` file and pass it with `ansible_ssh_common_args`.
 - **iot_factory is tested only on Ubuntu 24.04 LTS** and refuses other systems at preflight. It needs internet access (Docker apt repo, Docker Hub); there is no air-gapped mode yet. Changing `stack_admin_credentials` after the first install updates Node-RED, Grafana's login file and MQTT, but not the InfluxDB or Grafana admin passwords already stored in their databases.
-- **Day-2 is only supported by compose_app.** The other entry points support install and uninstall; a deployment update on simple_vm only refreshes the VM IP.
+- **Day-2:** compose_app and the simple_vm VM (also in iot_factory on a new DDPC VM) support deployment updates; see [Updating a simple_vm deployment](#updating-a-simple_vm-deployment). The other entry points support install and uninstall only.
 - **Shared SSH key:** all simple_vm and iot_factory DDPC VM deployments share the `example_key` key pair. To give a copy its own key, change `key_name` in `vm/definitions.yaml`.
-- **Fixed interface name:** `get_vm_info.sh` reads the IP from `enp1s0`. Images with a different first-NIC name need the script updated.
+- **Fixed interface names:** the netplan template, `pin-nic-names` and `get_vm_info.sh` assume the Ubuntu cloud-image names `enp1s0`, `enp2s0`, `enp3s0`. Images that name NICs differently need them updated; `pin-nic-names` then keeps the original netplan, so the VM still works but isn't pinned.
 
 ---
 

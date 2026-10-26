@@ -1,31 +1,51 @@
-network:  
+{#- Rendered twice by prepare_netplan_config.py: pinned=false gives the
+    first-boot netplan (kernel names); pinned=true gives the version that
+    pin_nic_names.sh installs, which matches each NIC by MAC and renames it to
+    a role name so a NIC added later can't take its name. -#}
+{%- macro nic(kernel, role) -%}
+{{ role if pinned else kernel }}:
+{%- if pinned %}
+      match:
+        macaddress: "__MAC_{{ role }}__"
+      set-name: {{ role }}
+{%- endif %}
+{%- endmacro -%}
+network:
   version: 2
   renderer: networkd
   ethernets:
-    enp1s0:
+    {{ nic('enp1s0', 'data0') }}
       dhcp-identifier: mac
-      dhcp4: {{ use_dhcp }} {% if not use_dhcp %}
+      dhcp4: {{ use_dhcp }}
+{%- if not use_dhcp %}
       addresses:
-      - {{ static_ip }} {% if use_dns %}
+      - {{ static_ip }}
+{%- if use_dns %}
       nameservers:
-        addresses: {{ dns }} {% endif %} {% if use_gateway %}
+        addresses: {{ dns }}
+{%- endif %}
+{%- if use_gateway %}
       routes:
         - to: default
-          via: {{ gateway }} {% endif %} {% endif %} {% if add_second_nic %}
-    enp2s0:
+          via: {{ gateway }}
+{%- endif %}
+{%- endif %}
+{%- if add_second_nic %}
+    {{ nic('enp2s0', 'data1') }}
       dhcp-identifier: mac
-      dhcp4: {{ use_dhcp2 }} {% if not use_dhcp2 %}
+      dhcp4: {{ use_dhcp2 }}
+{%- if not use_dhcp2 %}
       addresses:
-      - {{ static_ip2 }} {% if use_dns2 %}
+      - {{ static_ip2 }}
+{%- if use_dns2 %}
       nameservers:
-        addresses: {{ dns2 }} {% endif %} {% endif %}
-    enp3s0:
+        addresses: {{ dns2 }}
+{%- endif %}
+{%- endif %}
+    {{ nic('enp3s0', 'mgmt0') }}
+{%- else %}
+    {{ nic('enp2s0', 'mgmt0') }}
+{%- endif %}
       dhcp4: true
       dhcp4-overrides:
-        use-routes: false 
-    {% endif %} {% if not add_second_nic %}
-    enp2s0:
-      dhcp4: true
-      dhcp4-overrides:
-        use-routes: false 
-    {% endif %}
+        use-routes: false

@@ -19,7 +19,7 @@ dsl_definitions:
 
   # The VM's IP on its first NIC, read by vm_info. Services are published on it.
   factory_host_ip: &factory_host_ip
-    get_attribute: [vm_info, capabilities, vm_public_ip]
+    get_attribute: [vm_info, vm_public_ip]
 
   # Playbooks reach the VM through the DDPC Endpoint proxy (ECANS) resolved by
   # vm_info, so the VM doesn't need to be reachable from the orchestrator. The

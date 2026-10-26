@@ -2,7 +2,40 @@
 
 All notable changes to this blueprint are recorded here.
 
-## 4.0.1 - unreleased
+## 4.1.0 - unreleased
+
+simple_vm and iot_factory on a new DDPC VM (the `vm/` component).
+
+- Added: deployment updates for the VM. vCPUs, memory, OS disk size (grow
+  only), both NIC segments, adding or removing NIC 2, NAT port-forward rules
+  and USB passthrough can now be changed by a deployment update. Every applied
+  change reboots the VM. See "Updating a simple_vm deployment" in the README
+  for the tested results and the update options to use.
+- Added: `additional_disks` input (data type `additional_disk`) for empty data
+  disks. Disks can be added, grown or removed by an update; removing one
+  deletes it.
+- Added: NIC names are pinned to MAC addresses at first boot (`data0`,
+  `data1`, `mgmt0`) by `vm/templates/pin_nic_names.sh`, and NICs added later
+  get DHCP. Before this, adding a NIC renamed the management NIC and cut off
+  the Endpoint proxy.
+- Added: an `update_postapply` check (`vm/scripts/vm_postupdate.py`) that fails the
+  update if the VM record doesn't match the vCPUs, memory, disks or NIC
+  segments that were sent.
+- Fixed: a NIC segment or NAT rule change was not applied by an update. The
+  NIC list is now built from the inputs in the VM's own properties (and sends
+  `model_type: VIRTIO`); `prepare_network_settings.py` is removed.
+- Fixed: the `vm_ip` capability went stale after an update that changed the
+  VM's address. `vm_info` now writes a top-level `vm_public_ip` runtime
+  property (nested keys aren't saved by update operations).
+- Changed: `boot_order` (hidden) accepts only `hd`, `cdrom` and `network`.
+- Known issue: an update that changes nothing on the VM occasionally never
+  completes on the Endpoint (`update_apply` polls for up to an hour). Cancel it;
+  the VM is not affected.
+- Upgrade note: updating a 4.0.x deployment to this revision reboots the VM
+  once. VMs created before 4.1.0 are not pinned: adding NIC 2 to them cuts
+  off the management connection (remove it again to recover).
+
+## 4.0.1 - 2026-10-26
 
 - Fixed (simple_vm, iot_factory_vm): the deployment update form could not be
   completed. With no second NIC, "Static IP and CIDR prefix for second NIC"
