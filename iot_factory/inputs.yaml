@@ -288,7 +288,9 @@ inputs:
   ansible_debug_level:
     type: integer
     hidden: false
-    allow_update: true
+    # Every Ansible node reads this, and the nodes have no update operations
+    # yet, so changing it in a deployment update would reinstall the stack.
+    allow_update: false
     display_label: Ansible Debug Level
     description: |
       Ansible verbosity level (0 to 3). Above 0 adds a lot of output to the
@@ -304,7 +306,9 @@ inputs:
   ansible_timeout:
     type: integer
     hidden: false
-    allow_update: true
+    # Every Ansible node reads this, and the nodes have no update operations
+    # yet, so changing it in a deployment update would reinstall the stack.
+    allow_update: false
     display_label: Ansible Timeout
     description: |
       SSH connection timeout for Ansible, in seconds (10 to 600).
@@ -319,7 +323,9 @@ inputs:
   ansible_log_stdout:
     type: boolean
     hidden: false
-    allow_update: true
+    # Every Ansible node reads this, and the nodes have no update operations
+    # yet, so changing it in a deployment update would reinstall the stack.
+    allow_update: false
     display_label: Ansible Log Output
     description: |
       Send Ansible task progress (one line per task) to the deployment logs.

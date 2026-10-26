@@ -2,7 +2,28 @@
 
 All notable changes to this blueprint are recorded here.
 
-## 4.0.0 - unreleased
+## 4.0.1 - unreleased
+
+- Fixed (simple_vm, iot_factory_vm): the deployment update form could not be
+  completed. With no second NIC, "Static IP and CIDR prefix for second NIC"
+  was shown, filled with a stored empty value, and failed validation while
+  greyed out. `static_ip2` and `use_dns2` are now also `only_with:
+  add_second_nic`.
+- Changed (simple_vm, iot_factory_vm): `os_image_secret` and the hidden
+  `disk_controller` can no longer be changed by a deployment update. The
+  edge-plugin never sends the image in a VM update, and the boot-disk
+  controller of a running VM can't change.
+- Changed (simple_vm, iot_factory_vm): `vnic_0_segment_name` and
+  `vnic_1_segment_name` can no longer be changed by a deployment update. The
+  update completed but the VM stayed on its old segment, because the NIC list
+  is computed once at install.
+- Changed (iot_factory, all three entries): `ansible_debug_level`,
+  `ansible_timeout` and `ansible_log_stdout` can no longer be changed by a
+  deployment update. Every Ansible node reads them and has no update
+  operation yet, so a change would have reinstalled (torn down and redeployed)
+  the stack.
+
+## 4.0.0 - 2026-10-25
 
 Breaking: entry file names and catalog labels changed. Re-upload the
 blueprint and select the new entry file. Existing deployments are not
