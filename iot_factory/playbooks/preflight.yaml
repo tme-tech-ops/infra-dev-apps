@@ -75,14 +75,27 @@
             path: /opt/iot-factory/compose.yaml
           register: existing_stack
 
+        # Also run before a deployment update: ports the deployed stack already
+        # publishes are its own, but a changed port must be free.
+        - name: Read the ports of the deployed stack
+          ansible.builtin.slurp:
+            src: /opt/iot-factory/applied.json
+          register: applied_settings
+          failed_when: false
+
         - name: Check the service ports are free (or already used by this demo)
           vars:
             busy_ports: >-
               {{ listening.stdout_lines | map('split') | map(attribute=3)
                  | map('regex_replace', '^.*:', '') | map('int') | list }}
-            conflicts: "{{ required_ports | map('int') | select('in', busy_ports) | list }}"
+            applied: "{{ (applied_settings.content | b64decode | from_json) if applied_settings.content is defined else {} }}"
+            # Stacks deployed before applied.json existed: all ports count as theirs.
+            owned_ports: >-
+              {{ (applied | dict2items | selectattr('key', 'match', '.*_port$') | map(attribute='value') | map('int') | list)
+                 if applied else (required_ports | map('int') | list if existing_stack.stat.exists else []) }}
+            conflicts: "{{ required_ports | map('int') | select('in', busy_ports) | reject('in', owned_ports) | list }}"
           ansible.builtin.assert:
-            that: conflicts | length == 0 or existing_stack.stat.exists
+            that: conflicts | length == 0
             fail_msg: >-
               TCP port(s) {{ conflicts | join(', ') }} are already in use on the host.
               Stop the service using them or choose different ports in the Service Ports inputs.

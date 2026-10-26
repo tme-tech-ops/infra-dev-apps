@@ -209,7 +209,13 @@ node_templates:
         additional_disks: { get_input: additional_disks }
     interfaces:
       dell.interfaces.lifecycle:
-        # The edge-plugin's check_drift/update_config/update_apply apply the
+        # Replaces the edge-plugin's check_drift, which always reports drift:
+        # an update that doesn't change the VM no longer sends it a no-op
+        # update (which the Endpoint sometimes never completes).
+        check_drift:
+          implementation: vm/scripts/vm_check_drift.py
+          executor: central_deployment_agent
+        # The edge-plugin's update_config/update_apply apply the
         # change. This compares the VM record with what was sent, so an
         # update that completes without applying anything fails visibly.
         # update_postapply, not postupdate: the update workflow runs

@@ -1,0 +1,14 @@
+---
+# Deployment update of the stack, in one run: the preflight checks (a changed
+# port must be free; the stack's own ports are allowed), deploy_stack with the
+# new settings, then verify_demo. One run, because on DDPC the Endpoint proxy
+# address is only valid for the run that resolved it. A failed play stops the
+# run before the next one.
+- name: IoT Smart Factory - update preflight
+  ansible.builtin.import_playbook: preflight.yaml
+
+- name: IoT Smart Factory - update stack
+  ansible.builtin.import_playbook: deploy_stack.yaml
+
+- name: IoT Smart Factory - update verify
+  ansible.builtin.import_playbook: verify_demo.yaml

@@ -2,7 +2,48 @@
 
 All notable changes to this blueprint are recorded here.
 
-## 4.1.0 - unreleased
+## 4.2.0 - unreleased
+
+iot_factory (all three entries) gets deployment updates. simple_vm and
+iot_factory_vm get a VM drift check.
+
+- Added (iot_factory): deployment updates. Telemetry Interval, Auto Chaos
+  Mode, Grafana Anonymous Viewer, the six service ports and the Ansible
+  settings can now be changed. Accept Joins / Join A Hub Factory stay set at
+  install: a deployment update doesn't add or remove their node instances.
+  `deploy_stack` has a drift check (`iot_factory/scripts/stack_drift.py`)
+  that compares the desired settings with the ones its last successful run
+  applied, and its update runs preflight (a changed port must be free), the
+  deploy and verify_demo in one run (`iot_factory/playbooks/update_stack.yaml`).
+  The other Ansible nodes report no drift (`iot_factory/scripts/no_drift.py`),
+  so they are no longer reinstalled. The first update after upgrading re-runs
+  deploy_stack once. See "Updating an iot_factory deployment" in the README.
+- Fixed (iot_factory on DDPC, VM and layered): Ansible runs other than the
+  install could not reach the VM through the Endpoint proxy (UNREACHABLE,
+  "Could not resolve hostname"). The run's inventory was built from the proxy
+  address of the previous run, which the plugin released when it looked up a
+  new one. Each node now resolves the address just before its run
+  (`iot_factory/scripts/proxy_endpoint.py`: precreate, preupdate, and
+  prestop on the layered entry) and the plugin's `inventory_proxy_settings`
+  is no longer used.
+- Added (simple_vm, iot_factory_vm): a VM drift check
+  (`vm/scripts/vm_check_drift.py`) replaces the edge-plugin's, which always
+  reported drift. An update that doesn't change the VM (including any
+  iot_factory-only update) no longer sends it a no-op update, which the
+  Endpoint sometimes never completed (the 4.1.0 known issue).
+- Changed (iot_factory): preflight treats only the ports the deployed stack
+  publishes (recorded in `/opt/iot-factory/applied.json`) as its own.
+- Fixed (simple_vm, iot_factory_vm): ticking "Add Second NIC" in the update
+  form of a deployment created without one showed "Static IP and CIDR prefix
+  for second NIC" with an "invalid character" error, and Next stayed blocked
+  even after unticking it. The input is stored as null and the form validated
+  that value. The static IP and gateway patterns now also accept blank, "null"
+  and "None", and `prepare_netplan_config.py` checks for a real value when it
+  is needed.
+- Fixed (simple_vm, iot_factory_vm): with DHCP off, the install required a
+  gateway even when "Use Gateway" was unchecked.
+
+## 4.1.0 - 2026-10-26
 
 simple_vm and iot_factory on a new DDPC VM (the `vm/` component).
 

@@ -279,6 +279,22 @@
             mode: "0600"
           no_log: true
 
+        # The ports here count as this stack's own in preflight (run again
+        # before a deployment update). No secrets. Written last, so they only
+        # describe a stack that deployed successfully.
+        - name: Record the applied settings
+          ansible.builtin.copy:
+            dest: "{{ stack_dir }}/applied.json"
+            content: >-
+              {{ {'factory_site': factory_site, 'factory_line': factory_line,
+                  'publish_interval': publish_interval | int, 'auto_chaos': auto_chaos | bool,
+                  'grafana_anonymous_viewer': grafana_anonymous_viewer | bool,
+                  'mqtt_port': mqtt_port | int, 'nodered_port': nodered_port | int,
+                  'grafana_port': grafana_port | int, 'influxdb_port': influxdb_port | int,
+                  'mqtt_ws_port': mqtt_ws_port | int, 'mqttx_web_port': mqttx_web_port | int,
+                  'bridge_port': bridge_port | int, 'public_host': public_host} | to_nice_json }}
+            mode: "0644"
+
         - name: Stack deployed
           ansible.builtin.debug:
             msg: >-

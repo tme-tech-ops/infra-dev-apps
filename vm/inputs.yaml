@@ -356,7 +356,11 @@ inputs:
       Static IP Address and CIDR that will be assigned to the VM 
       Example: 192.168.0.100/24
     constraints:
-    - pattern: '^(?:((25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(\.(25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})\/(3[0-2]|[12]?\d)|)$'
+    # Also accepts blank, "null" and "None": a hidden input is stored as null,
+    # and the update form validates that value even while the input is greyed
+    # out, which blocked Next. prepare_netplan_config.py requires a real value
+    # when DHCP is off.
+    - pattern: '^(?:((25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(\.(25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})\/(3[0-2]|[12]?\d)|null|None|)$'
       error_message: |
         Invalid format for IP Address in CIDR format.
         Example: 172.16.0.1/16
@@ -390,7 +394,8 @@ inputs:
     description: IP address of the default gateway.
     required: false
     constraints:
-    - pattern: ^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$|^$
+    # Also accepts blank, "null" and "None" (see static_ip).
+    - pattern: '^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$|^(null|None)?$'
       error_message: |
         Invalid format for IP Address.
         Example: 172.16.0.1
@@ -527,7 +532,11 @@ inputs:
       Static IP Address and CIDR that will be assigned to the VM 
       Example: 192.168.0.100/24
     constraints:
-    - pattern: '^(?:((25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(\.(25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})\/(3[0-2]|[12]?\d)|)$'
+    # Also accepts blank, "null" and "None": a hidden input is stored as null,
+    # and the update form validates that value even while the input is greyed
+    # out, which blocked Next. prepare_netplan_config.py requires a real value
+    # when DHCP is off.
+    - pattern: '^(?:((25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(\.(25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})\/(3[0-2]|[12]?\d)|null|None|)$'
       error_message: |
         Invalid format for IP Address in CIDR format.
         Example: 172.16.0.1/16

@@ -54,7 +54,7 @@ inputs:
   publish_interval:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Telemetry Interval
     description: |
       Seconds between telemetry messages from each simulated machine
@@ -70,7 +70,7 @@ inputs:
   auto_chaos:
     type: boolean
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Auto Chaos Mode
     description: |
       Inject a random machine fault every few minutes, and clear it again,
@@ -86,7 +86,7 @@ inputs:
   grafana_anonymous_viewer:
     type: boolean
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Grafana Anonymous Viewer
     description: |
       Let anyone who can reach Grafana view the dashboards without logging
@@ -105,7 +105,7 @@ inputs:
   mqtt_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: MQTT Port
     description: |
       Host TCP port of the Mosquitto broker (password protected).
@@ -120,7 +120,7 @@ inputs:
   nodered_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Node-RED Port
     description: |
       Host TCP port of the Node-RED editor and fault injection API.
@@ -135,7 +135,7 @@ inputs:
   grafana_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Grafana Port
     description: |
       Host TCP port of Grafana.
@@ -150,7 +150,7 @@ inputs:
   influxdb_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: InfluxDB Port
     description: |
       Host TCP port of the InfluxDB UI and API.
@@ -165,7 +165,7 @@ inputs:
   mqtt_ws_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: MQTT Websocket Port
     description: |
       Host TCP port of the Mosquitto websocket listener used by browser MQTT
@@ -181,7 +181,7 @@ inputs:
   mqttx_web_port:
     type: integer
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: MQTTX Web Port
     description: |
       Host TCP port of MQTTX Web, a browser MQTT client for publishing
@@ -199,6 +199,9 @@ inputs:
   accept_joins:
     type: boolean
     hidden: false
+    # An update doesn't add or remove the accept_joins node (its instance count
+    # comes from this input, and a deployment update doesn't re-evaluate it),
+    # so this is set at install.
     allow_update: false
     display_label: Accept Joins (Act As Hub)
     description: |
@@ -218,6 +221,7 @@ inputs:
     hidden: false
     required: false
     only_with: accept_joins
+    # Read when the bridge listener is opened at install (see accept_joins).
     allow_update: false
     display_label: Bridge Credentials Secret
     description: |
@@ -249,6 +253,8 @@ inputs:
   join_hub:
     type: boolean
     hidden: false
+    # Set at install, like accept_joins: an update doesn't add or remove the
+    # join_hub node.
     allow_update: false
     display_label: Join A Hub Factory
     description: |
@@ -269,6 +275,7 @@ inputs:
     hidden: false
     required: false
     only_with: join_hub
+    # Read when joining at install (see join_hub).
     allow_update: false
     display_label: Hub Deployment ID
     description: |
@@ -288,9 +295,9 @@ inputs:
   ansible_debug_level:
     type: integer
     hidden: false
-    # Every Ansible node reads this, and the nodes have no update operations
-    # yet, so changing it in a deployment update would reinstall the stack.
-    allow_update: false
+    # Not part of the drift check, so a change re-runs nothing; the next run
+    # uses it.
+    allow_update: true
     display_label: Ansible Debug Level
     description: |
       Ansible verbosity level (0 to 3). Above 0 adds a lot of output to the
@@ -306,9 +313,9 @@ inputs:
   ansible_timeout:
     type: integer
     hidden: false
-    # Every Ansible node reads this, and the nodes have no update operations
-    # yet, so changing it in a deployment update would reinstall the stack.
-    allow_update: false
+    # Not part of the drift check, so a change re-runs nothing; the next run
+    # uses it.
+    allow_update: true
     display_label: Ansible Timeout
     description: |
       SSH connection timeout for Ansible, in seconds (10 to 600).
@@ -323,9 +330,9 @@ inputs:
   ansible_log_stdout:
     type: boolean
     hidden: false
-    # Every Ansible node reads this, and the nodes have no update operations
-    # yet, so changing it in a deployment update would reinstall the stack.
-    allow_update: false
+    # Not part of the drift check, so a change re-runs nothing; the next run
+    # uses it.
+    allow_update: true
     display_label: Ansible Log Output
     description: |
       Send Ansible task progress (one line per task) to the deployment logs.

@@ -16,6 +16,7 @@ Example blueprints for the **Dell Automation Platform (DAP)**, mainly targeting 
 3. [simple_vm](#3-simple_vm)
    - [Updating a simple_vm deployment](#updating-a-simple_vm-deployment)
 4. [iot_factory](#4-iot_factory)
+   - [Updating an iot_factory deployment](#updating-an-iot_factory-deployment)
    - [iot_factory on a new DDPC VM](#iot_factory-on-a-new-ddpc-vm)
    - [iot_factory on a simple_vm deployment](#iot_factory-on-a-simple_vm-deployment)
 5. [it_toolkit_compose](#5-it_toolkit_compose)
@@ -311,7 +312,7 @@ Defined in `vm/definitions.yaml`, in execution order:
    - `start` → `prepare_passwd.py` reads `vm_password` and stores a bcrypt hash.
 4. **`cloudinit`** (`dell.nodes.CloudInit.CloudConfig`): `precreate` renders `vm/templates/netplan_config.yaml` from the network inputs (`prepare_netplan_config.py`), twice: once by kernel NIC name and once pinned to MAC addresses, plus the first-boot script `vm/templates/pin_nic_names.sh`. `create` builds the cloud-config: hostname, the netplan files, the pinning script (see [Stable NIC names](#stable-nic-names)), a DHCP fallback for NICs added later, an SSH keep-alive, the sudo user with the hashed password and the generated public key, plus any extra `cloudinit` input. It depends on `ssh_keys` and `prepare_config`.
 5. **`vm`** (edge `NativeEdgeVM`): creates the VM on the Endpoint from `get_environment_capability: ece_service_tag`. It uses the uploaded image, CPU/memory/disk, additional disks, hardware options, passthrough devices and the cloud-config. The NIC list (`network_settings`) is built from the network inputs in the node's own properties, so a deployment update sends the new segments and NAT rules. The VM is named after the deployment. It depends on `cloudinit`, `binary_image` and `prepare_config`.
-   - On a deployment update the edge-plugin's `check_drift` / `update_config` / `update_apply` change the VM, and `update_postapply` → `vm_postupdate.py` reads the VM record back and fails the update if the vCPUs, memory, disks or NIC segments don't match what was sent.
+   - On a deployment update `check_drift` → `vm_check_drift.py` compares the desired VM config with the one last applied; only on a difference do the edge-plugin's `update_config` / `update_apply` change the VM, and `update_postapply` → `vm_postupdate.py` reads the VM record back and fails the update if the vCPUs, memory, disks or NIC segments don't match what was sent.
 6. **`vm_info`**:
    - `create` → `get_target_id.py` resolves the Endpoint and stores the eo-proxy `connection_proxy_settings`.
    - `start` → Fabric runs `get_vm_info.sh` in the VM over that proxy (using the generated key). It waits for an IPv4 address on the first NIC (`data0`, or `enp1s0` on VMs created before 4.1.0) and publishes it as `vm_public_ip`.
@@ -347,7 +348,7 @@ Use **Update Deployment** and change only the inputs marked ✓ in the tables ab
 | Additional disk: add | Applied (format and mount the new disk yourself) | Usually no: attached live in the 4.1.0 test (an earlier test rebooted) |
 | Additional disk: grow | Applied; grow the partition/filesystem in the guest | Yes |
 | Additional disk: remove | Applied; **the disk and its data are deleted** | No |
-| No change | Nothing happens (but see the note on stuck updates below) | No |
+| No change | Nothing is sent to the VM (the drift check finds no difference) | No |
 
 The other inputs are locked (greyed out): the OS image, hostname, user and password, the datastore, IP/DNS/gateway settings (applied by cloud-init at install only), and GPU, video, PCIe and serial passthrough (not tested).
 
@@ -362,7 +363,7 @@ The other inputs are locked (greyed out): the OS image, hostname, user and passw
 - **Almost every applied change reboots the VM** (an update takes about 1.5 minutes; only adding or removing an additional disk is done live). Plan for the downtime, including for layered apps.
 - **A failed update still saves the new input values.** The deployment then shows values the VM doesn't have, and every later update sends them again. Run another update with the values the VM really has (with **Force update**) to bring them back in line.
 - **Adding NIC 2 to a VM created before 4.1.0 cuts off the VM's management connection.** Those VMs don't pin their NIC names (see [Stable NIC names](#stable-nic-names)): the new NIC takes the management NIC's name, and the Endpoint proxy (and anything layered that uses it) can no longer reach the VM. Removing NIC 2 again restores it. Changing an existing NIC 2's segment is safe on any VM.
-- **An update that changes nothing on the VM can get stuck.** Occasionally the Endpoint never reports such an update as finished, and the `vm` node keeps logging `Update deployment is not done yet` for up to an hour before failing. If that goes on for more than about 10 minutes, cancel the execution (**Executions → Cancel**). The VM is not affected. Don't wait it out with "Run automatic reinstall" checked, because a failed VM update then recreates the VM.
+- **An update that changes nothing on the VM doesn't touch it.** The `vm` drift check (`vm/scripts/vm_check_drift.py`) compares the desired VM config with the one last applied, so no update is sent. (Before 4.2.0 every update re-sent the VM config, and the Endpoint sometimes never completed such a no-op update.) If a VM update ever keeps logging `Update deployment is not done yet` for more than about 10 minutes, cancel the execution; the VM is not affected.
 - **A NIC added by an update uses DHCP.** The static IP and DNS inputs for NIC 2 apply only when NIC 2 is created at install.
 - **Updating a 4.0.x deployment to the 4.1.0 blueprint** reboots the VM once, because the NIC list is now sent with the NIC model set explicitly.
 
@@ -512,11 +513,11 @@ The credentials never appear in compose files or environment variables. They are
 | `stack_admin_credentials` | Stack Admin Credentials Secret | secret_key | – | ✗ | Schema `basic_auth_credentials` |
 | `factory_site` | Factory Site | string | `hopkinton` | ✗ | Lowercase letters, digits, hyphens. Used in topics, tags and the dashboard title. |
 | `factory_line` | Production Line | string | `line-1` | ✗ | As above |
-| `publish_interval` | Telemetry Interval | integer | `2` | ✗ | Seconds, 1–60 |
-| `auto_chaos` | Auto Chaos Mode | boolean | `false` | ✗ | Chaos mode at start-up; can be toggled at runtime |
-| `grafana_anonymous_viewer` | Grafana Anonymous Viewer | boolean | `true` | ✗ | Read-only dashboards without a login (kiosk screens) |
+| `publish_interval` | Telemetry Interval | integer | `2` | ✓ | Seconds, 1–60 |
+| `auto_chaos` | Auto Chaos Mode | boolean | `false` | ✓ | Chaos mode at start-up; can be toggled at runtime |
+| `grafana_anonymous_viewer` | Grafana Anonymous Viewer | boolean | `true` | ✓ | Read-only dashboards without a login (kiosk screens) |
 
-**Service Ports**: `mqtt_port` (`1883`), `nodered_port` (`1880`), `grafana_port` (`3000`), `influxdb_port` (`8086`), `mqtt_ws_port` (`9001`), `mqttx_web_port` (`8080`), each 1024–65535.
+**Service Ports**: `mqtt_port` (`1883`), `nodered_port` (`1880`), `grafana_port` (`3000`), `influxdb_port` (`8086`), `mqtt_ws_port` (`9001`), `mqttx_web_port` (`8080`), each 1024–65535. All six can be changed by a deployment update (a new port must be free on the host).
 
 **Factory Network**
 
@@ -532,17 +533,17 @@ The credentials never appear in compose files or environment variables. They are
 
 | Input | Label | Type | Default | Upd | Notes |
 |---|---|---|---|---|---|
-| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✗ | 0–3. Raise only to troubleshoot. |
-| `ansible_timeout` | Ansible Timeout | integer | `30` | ✗ | SSH connection timeout, 10–600 s |
-| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✗ | One line per task in the deployment log. Failures are always logged. |
+| `ansible_debug_level` | Ansible Debug Level | integer | `0` | ✓ | 0–3. Raise only to troubleshoot. |
+| `ansible_timeout` | Ansible Timeout | integer | `30` | ✓ | SSH connection timeout, 10–600 s |
+| `ansible_log_stdout` | Ansible Log Output | boolean | `true` | ✓ | One line per task in the deployment log. Failures are always logged. |
 
 ### Node template step-through
 
 Defined in `iot_factory/definitions.yaml`. All are `dell.nodes.ansible.Executor` nodes connecting over direct SSH (`proxy_settings: disable: true`), chained with `depends_on`:
 
-1. **`preflight`** (`preflight.yaml`): read-only. It reads `/etc/os-release` with `raw` (no Python or facts needed) and rejects anything but Ubuntu 24.04. It then checks the architecture (x86_64/aarch64), RAM (≥ 2 GB), free disk (≥ 10 GB), that the six service ports are free, and outbound HTTPS to `download.docker.com` and Docker Hub. `number_of_attempts: 1`: a failed check is final.
+1. **`preflight`** (`preflight.yaml`): read-only. It reads `/etc/os-release` with `raw` (no Python or facts needed) and rejects anything but Ubuntu 24.04. It then checks the architecture (x86_64/aarch64), RAM (≥ 2 GB), free disk (≥ 10 GB), that the service ports are free (ports the deployed stack already publishes count as its own), and outbound HTTPS to `download.docker.com` and Docker Hub. `number_of_attempts: 1`: a failed check is final.
 2. **`install_docker`** (`install_docker.yaml`): Docker CE and the compose plugin from Docker's apt repository. An existing Docker engine is left alone. A marker in `/etc/iot-factory` records whether this blueprint installed Docker. **Uninstall** (`stop` → `teardown_docker.yaml`) purges Docker, its repo, key and data **only if** the marker exists.
-3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run, hashes passwords on the host, and applies the InfluxDB dashboard as an `influx` stack. Re-runs are idempotent: nothing changes or restarts unless an input or file did. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
+3. **`deploy_stack`** (`deploy_stack.yaml`): renders `/opt/iot-factory` and runs `docker compose up --wait` until every health check passes. It generates the InfluxDB token on the first run, hashes passwords on the host, and applies the InfluxDB dashboard as an `influx` stack. Re-runs are idempotent: nothing changes or restarts unless an input or file did. It records the settings it applied (`/opt/iot-factory/applied.json` on the host, and the `applied_settings` runtime property) for preflight and the drift check. **Uninstall** (`stop` → `teardown_stack.yaml`) runs `compose down --volumes --rmi all` and deletes `/opt/iot-factory`.
 4. **`verify_demo`** (`verify_demo.yaml`): proves the demo works. It checks that telemetry arrives on MQTT, anonymous MQTT and unauthenticated API calls are refused, and the control room, MQTTX Web and websocket listener are up. It checks that a jam injected through `/api/fault` raises an alert, which it then clears, that telemetry and alerts are in InfluxDB, and that the Grafana dashboard is provisioned.
 5. **`accept_joins`** (`accept_joins.yaml`, only when `accept_joins` is true): hashes the bridge password, writes the bridge listener, its password file and its ACL into `mosquitto/config/conf.d/`, and restarts the broker. **Uninstall** (`stop` → `close_joins.yaml`) closes the listener.
 6. **`join_hub`** (`join_hub.yaml`, only when `join_hub` is true): checks that the hub accepts joins and that its bridge port is reachable. It writes the Mosquitto bridge, restarts the broker and waits for the bridge to report connected. **Uninstall** (`stop` → `leave_hub.yaml`) removes the bridge.
@@ -560,6 +561,23 @@ The plugin also retries failed playbooks (exit code 2), not only unreachable hos
 - every node then logs an error-level "hosts already exists" line.
 
 **Uninstall** returns the host to its pre-install state: bridge, stack, volumes, images and, if this blueprint installed it, Docker. `ca-certificates`, `curl` and `python3-debian` stay installed.
+
+### Updating an iot_factory deployment
+
+These inputs can be changed with **Update Deployment** (all three entries): Telemetry Interval, Auto Chaos Mode, Grafana Anonymous Viewer, the six service ports, and the Ansible settings. The site, line, stack credentials, connection inputs and the Factory Network inputs are locked.
+
+How an update works:
+
+- **Drift check.** `deploy_stack` compares the desired settings with the ones its last successful run applied (`iot_factory/scripts/stack_drift.py`). Only a difference re-runs anything. The other nodes always report no drift (`iot_factory/scripts/no_drift.py`), so they are never reinstalled.
+- **One run.** On a difference, `deploy_stack`'s update runs `update_stack.yaml`: preflight (a changed port must be free), the deploy with the new settings (`docker compose` recreates only the containers whose settings changed), then verify_demo. The new settings are then recorded as applied. If the run fails, nothing is recorded, so the next update tries again.
+- **No change, or an Ansible setting only:** nothing runs on the host (about a minute).
+- **Accept Joins / Join A Hub Factory are set at install.** Their node instances exist only when the input was on at install, and a deployment update doesn't add or remove them. To start or stop accepting joins, or to join or leave a hub, reinstall the deployment (uninstall, then install with the new inputs).
+
+Update options: the defaults are right. Leave **Run automatic reinstall** unchecked (a failed update would otherwise reinstall nodes). Check **Force update** only if the update is rejected because another deployment depends on this one.
+
+Tested on all three entries (2026-10-26): Telemetry Interval, Auto Chaos, Grafana Anonymous Viewer, Grafana port and back, an Ansible setting (no run), no change (no run), and the first update after upgrading from 4.1 (re-runs `deploy_stack` once, because no applied settings are recorded yet).
+
+On DDPC (the VM and layered entries), Ansible reaches the VM through the Endpoint proxy. Run updates (and installs or uninstalls) of these deployments **one at a time**: two Ansible runs through the same proxy at once can cut each other off. If an update or install fails with `UNREACHABLE` or `Could not resolve hostname hzp-eoproxy-…`, run it again.
 
 ### Capabilities
 
@@ -586,8 +604,8 @@ The same demo in one deployment: it creates the **simple_vm** VM (cloud-init, ge
 
 - **Inputs:** the simple_vm inputs (artifact, VM, device passthrough, network) plus the iot_factory inputs, minus the four remote-host inputs. **`os_image_secret` must point to an Ubuntu 24.04 cloud image**, or preflight stops the deployment. The VM defaults (2 vCPUs, 4 GB RAM, 50 GB disk) are enough. Use 4 vCPUs and 8 GB for a hub with several joined factories.
 - **Network:** the services are published on the VM's first NIC, and the capabilities use that IP (`vm_ip`). Choose a **bridged** segment with DHCP or a static IP on a network your browser can reach. On a NAT segment the capabilities show the VM's private address: add port-forward rules for the service ports and use the Endpoint's host IP instead. The VM needs internet access (Docker apt repo, Docker Hub).
-- **Nodes:** `ssh_keys` → `binary_image` → `prepare_config` → `cloudinit` → `vm` → `vm_info` (proxy target and VM IP), then `preflight` → `install_docker` → `deploy_stack` → `verify_demo` (→ `accept_joins` / `join_hub`), defined in `iot_factory/ddpc_vm/definitions.yaml`. `ANSIBLE_SSH_RETRIES` is set to 10: each eo-proxy session is published as a new cluster service whose DNS name takes a minute or two to resolve, and without SSH retries every node's first connection fails as unreachable.
-- **Updates:** the VM inputs can be changed as for [simple_vm](#updating-a-simple_vm-deployment) (the VM reboots, and the stack comes back on its own). The iot_factory inputs are not updatable yet.
+- **Nodes:** `ssh_keys` → `binary_image` → `prepare_config` → `cloudinit` → `vm` → `vm_info` (proxy target and VM IP), then `preflight` → `install_docker` → `deploy_stack` → `verify_demo` (→ `accept_joins` / `join_hub`), defined in `iot_factory/ddpc_vm/definitions.yaml`. Each node resolves the VM's eo-proxy address right before its run (`iot_factory/scripts/proxy_endpoint.py`, in `precreate`, `preupdate` and on the layered entry `prestop`): a proxy address is only valid for the run that resolved it. `ANSIBLE_SSH_RETRIES` is set to 10, because a new proxy address takes a minute or two to resolve in cluster DNS.
+- **Updates:** the VM inputs can be changed as for [simple_vm](#updating-a-simple_vm-deployment) (the VM reboots, and the stack comes back on its own), and the iot_factory inputs as in [Updating an iot_factory deployment](#updating-an-iot_factory-deployment). An update that changes only iot_factory settings doesn't touch the VM.
 - **Uninstall** deletes the VM (and the uploaded image), which removes Docker, the stack and any bridge, so this entry has no teardown playbooks.
 - **Capabilities:** the iot_factory capabilities with `<remote_host>` replaced by the VM IP, plus the simple_vm capabilities (`service_tag`, `vm_name`, `vm_ip`, `vm_user_name`, `vm_ssh_private_key`, …).
 - **Upload size:** as above, upload this entry with only its own files (`iot_factory_vm_for_DDPC.yaml`, `vm/`, `iot_factory/`, `CHANGELOG.md`) to keep the per-node playbook download short.
@@ -601,7 +619,7 @@ The same demo, layered onto the VM of an existing simple_vm deployment. It reads
 - **Parent VM:** the simple_vm deployment must be built from an **Ubuntu 24.04** cloud image, or preflight stops the deployment before changing anything. The simple_vm defaults (2 vCPUs, 4 GB RAM, 50 GB disk) are enough. Use 4 vCPUs and 8 GB for a hub with several joined factories.
 - **Inputs:** the iot_factory inputs above, minus the four remote-host inputs.
 - **Network:** the services are published on the VM's first NIC, and the capabilities use the parent's `vm_ip`. Choose a **bridged** segment with DHCP or a static IP on a network your browser can reach. On a NAT segment the capabilities show the VM's private address: add port-forward rules for the service ports to the simple_vm deployment and use the Endpoint's host IP instead. The VM needs internet access (Docker apt repo, Docker Hub).
-- **Nodes:** `vm_info` (`get_target_id.py` resolves the eo-proxy target from the parent's service tag), then the same chain as the remote-host entry: `preflight` → `install_docker` → `deploy_stack` → `verify_demo` (→ `accept_joins` / `join_hub`), defined in `iot_factory/ddpc_layered/definitions.yaml`. `ANSIBLE_SSH_RETRIES` is set to 10: each eo-proxy session is published as a new cluster service whose DNS name takes a minute or two to resolve, and without SSH retries every node's first connection fails as unreachable.
+- **Nodes:** `vm_info` (`get_target_id.py` resolves the eo-proxy target from the parent's service tag), then the same chain as the remote-host entry: `preflight` → `install_docker` → `deploy_stack` → `verify_demo` (→ `accept_joins` / `join_hub`), defined in `iot_factory/ddpc_layered/definitions.yaml`. Each node resolves the VM's eo-proxy address right before its run (`iot_factory/scripts/proxy_endpoint.py`, in `precreate`, `preupdate` and on the layered entry `prestop`): a proxy address is only valid for the run that resolved it. `ANSIBLE_SSH_RETRIES` is set to 10, because a new proxy address takes a minute or two to resolve in cluster DNS.
 - **Uninstall** runs the same teardown playbooks as the remote-host entry (bridge, stack, volumes, images, and Docker if this blueprint installed it) and leaves the VM. Uninstall and delete this deployment before uninstalling its simple_vm parent.
 - **Capabilities:** the iot_factory capabilities above, with `<remote_host>` replaced by the parent's VM IP.
 - **Joining:** all three entries expose the same join capabilities, so any factory can join a hub deployed from another entry, as long as the joiner can reach the hub's bridge port.
@@ -847,7 +865,7 @@ Always run the **Uninstall** workflow and wait for it to finish before deleting 
 - **Private-registry pulls on EdgeOS 4.3 (edge-plugin 3.3.33.0):** `RegistryLogin` reports success, but the Endpoint pulls images anonymously, so images from private registry projects fail with `unauthorized`. Public pulls work. The login wiring in it_toolkit_compose and compose_app will work unchanged once the platform is fixed.
 - **SSH host keys are not verified** by iot_factory (`StrictHostKeyChecking=no`), on either entry. To harden this, pin the host key in a `known_hosts` file and pass it with `ansible_ssh_common_args`.
 - **iot_factory is tested only on Ubuntu 24.04 LTS** and refuses other systems at preflight. It needs internet access (Docker apt repo, Docker Hub); there is no air-gapped mode yet. Changing `stack_admin_credentials` after the first install updates Node-RED, Grafana's login file and MQTT, but not the InfluxDB or Grafana admin passwords already stored in their databases.
-- **Day-2:** compose_app and the simple_vm VM (also in iot_factory on a new DDPC VM) support deployment updates; see [Updating a simple_vm deployment](#updating-a-simple_vm-deployment). The other entry points support install and uninstall only.
+- **Day-2:** compose_app, simple_vm and the three iot_factory entries support deployment updates; see [Updating a simple_vm deployment](#updating-a-simple_vm-deployment) and [Updating an iot_factory deployment](#updating-an-iot_factory-deployment). it_toolkit_compose supports install and uninstall only.
 - **Shared SSH key:** all simple_vm and iot_factory DDPC VM deployments share the `example_key` key pair. To give a copy its own key, change `key_name` in `vm/definitions.yaml`.
 - **Fixed interface names:** the netplan template, `pin-nic-names` and `get_vm_info.sh` assume the Ubuntu cloud-image names `enp1s0`, `enp2s0`, `enp3s0`. Images that name NICs differently need them updated; `pin-nic-names` then keeps the original netplan, so the VM still works but isn't pinned.
 
