@@ -2,7 +2,25 @@
 
 All notable changes to this blueprint are recorded here.
 
-## 4.3.0 - unreleased
+## 4.3.1 - unreleased
+
+compose_app review (Day-2 rules from 4.1–4.3; regression on the live
+platform, see the PR).
+
+- Fixed (compose_app): an update with an invalid definition could delete the
+  running stack. If a container had also stopped (container-state drift),
+  `nativeedge_compose` still reported drift; its update failed on the invalid
+  definition and, with "Run automatic reinstall" checked, the orchestrator
+  deleted the stack and could not create it again. The drift check now
+  reports nothing while the desired definition is invalid, so only
+  `compose_definition`'s update fails and the stack keeps running.
+- Changed (compose_app): version label 1.1.0 -> 4.3.1, in line with the repo
+  version (the catalog revision was already 4.0.0). No functional change.
+- Docs (compose_app): a failed update still saves the new input values; fix
+  them in the next update. If a stack was removed by a failed update, run
+  Install on the deployment to recreate it.
+
+## 4.3.0 - 2026-10-26
 
 - Added (it_toolkit_compose): deployment updates. Site Name, Alert Topic, the
   health-check targets, Check Interval, the four ports and Image Registry can
