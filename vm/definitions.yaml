@@ -43,24 +43,14 @@ node_templates:
           implementation:
             edge.nativeedge_plugin.tasks.delete_binary
 
-  # Computes network, serial-port and password runtime properties for the
-  # VM. Nothing is created outside DAP, so there is nothing to undo on
-  # uninstall (no delete/stop).
+  # Computes the serial-port and password runtime properties for the VM.
+  # Nothing is created outside DAP, so there is nothing to undo on uninstall
+  # (no delete/stop). Anything a deployment update must change is built in
+  # the VM's own properties instead: this node isn't re-run by an update.
   prepare_config:
     type: dell.nodes.ApplicationModule
     interfaces:
       dell.interfaces.lifecycle:
-        precreate:
-          implementation:
-            vm/scripts/prepare_network_settings.py
-          executor: central_deployment_agent
-          inputs:
-            network_segments:
-              - { get_input: vnic_0_segment_name }
-              - { get_input: vnic_1_segment_name }
-            port_forwards:
-              - { get_input: port_forward_rules }
-              - { get_input: port_forward_rules2 }
         create:
           implementation: vm/scripts/prepare_serial_ports.py
           executor: central_deployment_agent
@@ -80,12 +70,35 @@ node_templates:
       resource_config:
         hostname: { get_input: vm_hostname }
         runcmd:
+          - /usr/local/sbin/pin-nic-names
           - netplan apply
           - systemctl restart sshd
         write_files:
           - content: { get_attribute: [SELF, netplan_encoded] }
             encoding: b64
             path: /etc/netplan/50-cloud-init.yaml
+          # Pins NIC names to MACs at first boot, so a NIC added by a
+          # deployment update can't rename the management NIC.
+          - content: { get_attribute: [SELF, netplan_pinned_encoded] }
+            encoding: b64
+            path: /etc/netplan-pinned.yaml.tmpl
+            permissions: '0600'
+          - content: { get_attribute: [SELF, pin_script_encoded] }
+            encoding: b64
+            path: /usr/local/sbin/pin-nic-names
+            permissions: '0755'
+          # NICs added after install get DHCP (no default route). The
+          # netplan-generated files sort first, so pinned NICs are unaffected.
+          - content: |
+              [Match]
+              Name=en*
+
+              [Network]
+              DHCP=ipv4
+
+              [DHCPv4]
+              UseRoutes=false
+            path: /etc/systemd/network/99-added-nics.network
           - content: |
               ClientAliveInterval 1800
               ClientAliveCountMax 3
@@ -119,6 +132,7 @@ node_templates:
           executor: central_deployment_agent
           inputs:
             template: vm/templates/netplan_config.yaml
+            pin_script: vm/templates/pin_nic_names.sh
             parameters:
               use_dhcp: { get_input: use_dhcp }
               static_ip: { get_input: static_ip }
@@ -162,7 +176,27 @@ node_templates:
           secure_boot: { get_input: hardware_options.secure_boot }
           firmware_type: { get_input: hardware_options.firmware_type }
         enable_management: { get_input: enable_management }
-        network_settings: { get_attribute: [prepare_config, network_settings] }
+        # Built from the inputs here (not by a script) so that a deployment
+        # update sends the new segments and NAT rules. NIC 2 is dropped when
+        # add_second_nic is false; NAT rules only apply with use_nat(2).
+        network_settings:
+          jmespath:
+            - >-
+              [?segment_name && enabled].{name: name,
+              segment_name: segment_name, model_type: model_type,
+              port_fwd_rules: (nat && port_fwd_rules) || `[]`}
+            - - name: VNIC0
+                enabled: true
+                segment_name: { get_input: vnic_0_segment_name }
+                model_type: VIRTIO
+                nat: { get_input: use_nat }
+                port_fwd_rules: { get_input: port_forward_rules }
+              - name: VNIC1
+                enabled: { get_input: add_second_nic }
+                segment_name: { get_input: vnic_1_segment_name }
+                model_type: VIRTIO
+                nat: { get_input: use_nat2 }
+                port_fwd_rules: { get_input: port_forward_rules2 }
         ports:
           usb: { get_input: usb }
           serial_port: { get_attribute: [prepare_config, serial_ports_list] }
@@ -173,6 +207,16 @@ node_templates:
         iso_files: { get_input: iso_files }
         boot_order: { get_input: boot_order }
         additional_disks: { get_input: additional_disks }
+    interfaces:
+      dell.interfaces.lifecycle:
+        # The edge-plugin's check_drift/update_config/update_apply apply the
+        # change. This compares the VM record with what was sent, so an
+        # update that completes without applying anything fails visibly.
+        # update_postapply, not postupdate: the update workflow runs
+        # preupdate/update/postupdate before update_config/update_apply.
+        update_postapply:
+          implementation: vm/scripts/vm_postupdate.py
+          executor: central_deployment_agent
     relationships:
        - type: dell.relationships.depends_on
          target: cloudinit

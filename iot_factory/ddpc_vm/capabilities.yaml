@@ -3,7 +3,7 @@ dsl_definitions:
   # The VM's IP on its first NIC, read by vm_info. On a NAT segment this is the
   # VM's private address: add port-forward rules for the service ports.
   factory_host_ip: &factory_host_ip
-    get_attribute: [vm_info, capabilities, vm_public_ip]
+    get_attribute: [vm_info, vm_public_ip]
 
 capabilities:
 

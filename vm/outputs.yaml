@@ -15,7 +15,7 @@ capabilities:
   vm_ip:
     description: Virtal Machine IP
     value:
-      get_attribute: [ vm_info, capabilities, vm_public_ip ]
+      get_attribute: [ vm_info, vm_public_ip ]
 
   vm_user_name:
     description: Virtual Machine User Name

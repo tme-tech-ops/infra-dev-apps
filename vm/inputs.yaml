@@ -111,9 +111,12 @@ inputs:
   os_disk_size:
     type: string
     hidden: false
+    # Grow only: the compute API refuses to shrink the main disk.
     allow_update: true
     display_label: OS Disk Size
-    description: Storage size with unit [KB,MB,GB,TB,PB,EB,ZB,YB].
+    description: |
+      Storage size with unit [KB,MB,GB,TB,PB,EB,ZB,YB].
+      A deployment update can grow the disk but not shrink it.
     default: 50GB
     required: true
     constraints:
@@ -145,11 +148,29 @@ inputs:
       group: vm
       index: 40
 
+  additional_disks:
+    type: list
+    item_type: additional_disk
+    hidden: false
+    allow_update: true
+    display_label: Additional Disks
+    description: |
+      Extra empty disks for the VM. Each needs a name, a size, a unit and the
+      datastore path (for example /DataStore0). The guest sees them as raw
+      disks (vdb, vdc, ...): partition, format and mount them yourself.
+      A deployment update can add a disk, grow one or remove one. Removing a
+      disk deletes it and its data.
+    required: false
+    default: []
+    display:
+      group: vm
+      index: 50
+
 # Passthrough device inputs
   use_passthrough:
     type: boolean
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Enable device passthrough
     description: |
       Uncheck to define usb, serial, gpu, video, and pcie devices for VM passthrough
@@ -166,7 +187,7 @@ inputs:
     item_type: string
     hidden: false
     only_with: use_passthrough
-    allow_update: false
+    allow_update: true
     display_label: USB Device list
     description: >
       A list of USB logical names (string). USB-1 to USB-10 for Passthrough.
@@ -296,9 +317,7 @@ inputs:
   vnic_0_segment_name:
     type: string
     hidden: false
-    # Not applied by a deployment update yet (the NIC list is computed
-    # once at install), so it stays locked until Day-2 support lands.
-    allow_update: false
+    allow_update: true
     display_label: Virtual Network Segment name for Management Interface
     description: Name of the Virtual Network Segment.
     constraints:
@@ -412,7 +431,7 @@ inputs:
   use_nat:
     type: boolean
     hidden: false
-    allow_update: false
+    allow_update: true
     display_label: Enable NAT Port Forwarding
     description: |
       Uncheck to define NAT Port Forwarding rules when required
@@ -427,7 +446,7 @@ inputs:
   port_forward_rules:
     type: list
     hidden: false
-    allow_update: false
+    allow_update: true
     only_with: use_nat
     item_type: port_forward_rules
     description: |
@@ -443,7 +462,9 @@ inputs:
   add_second_nic:
     type: boolean
     hidden: false
-    allow_update: false
+    # Adding NIC 2 to a running VM is safe only on VMs created by 4.1.0 or
+    # later (NIC names pinned at first boot). An added NIC gets DHCP.
+    allow_update: true
     display_label: Add Second NIC 
     description: |
       If false, then static ip, dns, and gateway must be configured.
@@ -459,9 +480,7 @@ inputs:
     type: string
     hidden: false
     only_with: add_second_nic
-    # Not applied by a deployment update yet (the NIC list is computed
-    # once at install), so it stays locked until Day-2 support lands.
-    allow_update: false
+    allow_update: true
     display_label: Second Virtual Network Segment name
     description: Name of the Virtual Network Segment.
     required: false
@@ -479,7 +498,9 @@ inputs:
   use_dhcp2:
     type: boolean
     hidden: false
-    allow_update: false
+    # Shown when NIC 2 is added by an update. The static settings below
+    # apply only at install; an added NIC always uses DHCP.
+    allow_update: true
     only_with: add_second_nic 
     display_label: Use DHCP on second NIC
     description: |
@@ -552,7 +573,7 @@ inputs:
   use_nat2:
     type: boolean
     hidden: false
-    allow_update: false
+    allow_update: true
     only_with: add_second_nic 
     display_label: Enable NAT Port Forwarding on second NIC
     description: |
@@ -568,7 +589,7 @@ inputs:
   port_forward_rules2:
     type: list
     hidden: false
-    allow_update: false
+    allow_update: true
     only_with: use_nat2 
     item_type: port_forward_rules
     description: |
@@ -749,18 +770,6 @@ inputs:
     required: false
     default: { get_input: serial_port_wrapper }
 
-  additional_disks:
-    type: list
-    item_type: dict
-    hidden: true
-    allow_update: false
-    display_label: Additional Disks
-    description: >
-      List additional disks (references to catalog) to be downloaded
-      before Virtual Machine provisioning
-    required: false
-    default: []
-
   boot_order:
     type: list
     item_type: string
@@ -772,6 +781,9 @@ inputs:
       Boot order of the Virtual Machine.
       If empty no changes will be made.
     default: []
+    constraints:
+      - valid_values: [hd, cdrom, network]
+        error_message: Each entry must be hd, cdrom or network.
 
 # Hidden Network
   # network_settings: # THIS INPUT IS NOT NEEDED, handled by network_config node template
@@ -844,6 +856,28 @@ inputs:
 # Data types
 
 data_types:
+  # The edge-plugin's additional disk format.
+  additional_disk:
+    properties:
+      name:
+        type: string
+        required: true
+        description: Disk name, unique within the VM (for example data1)
+      storage:
+        type: integer
+        required: true
+        description: Disk size, in storage_unit
+      storage_unit:
+        type: string
+        default: GB
+        required: true
+        description: Size unit ("MB", "GB", "TB")
+      disk:
+        type: string
+        default: /DataStore0
+        required: true
+        description: Datastore path on the Endpoint (see Endpoint Datastore Path)
+
   port_forward_rules:
     properties:
       host_ip:

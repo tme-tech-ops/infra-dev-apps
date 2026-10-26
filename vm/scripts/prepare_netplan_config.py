@@ -18,10 +18,20 @@ if parameters.get("add_second_nic"):
 
 ctx.logger.debug(f'Generating inputs: {template}, {parameters}')
 
-content = ctx.get_resource_and_render(resource_path=template,
-                                      template_variables=dict(parameters))
-netplan_encoded = base64.b64encode(content)
+def render(resource_path, **extra):
+    return ctx.get_resource_and_render(resource_path=resource_path,
+                                       template_variables=dict(parameters, **extra))
+
+
+# First-boot netplan (kernel names), plus the pinned version and the script
+# that installs it at first boot (see vm/templates/pin_nic_names.sh).
+content = render(template, pinned=False)
+pinned = render(template, pinned=True)
+pin_script = render(inputs.get("pin_script"))
+yaml.safe_load(pinned.decode('utf-8'))  # fail early if invalid
 
 ctx.instance.runtime_properties['template_resource_config'] = \
-    yaml.load(content.decode('utf-8'), Loader=yaml.Loader)
-ctx.instance.runtime_properties['netplan_encoded'] = netplan_encoded.decode('utf-8')
+    yaml.safe_load(content.decode('utf-8'))
+ctx.instance.runtime_properties['netplan_encoded'] = base64.b64encode(content).decode('utf-8')
+ctx.instance.runtime_properties['netplan_pinned_encoded'] = base64.b64encode(pinned).decode('utf-8')
+ctx.instance.runtime_properties['pin_script_encoded'] = base64.b64encode(pin_script).decode('utf-8')

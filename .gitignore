@@ -4,3 +4,4 @@ __pycache__/
 
 # Local-only test harnesses (not published)
 compose_app/tests/
+vm/tests/
