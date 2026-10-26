@@ -6,15 +6,23 @@ from nativeedge.exceptions import NonRecoverableError
 
 template = inputs.get("template")
 parameters = inputs.get("parameters")
+
+
+def blank(name):
+    # Hidden inputs are stored as null, and the UI may hand back "null" or
+    # "None" (the IP patterns accept those so the update form isn't blocked).
+    return str(parameters.get(name) or "").strip() in ("", "null", "None")
+
+
 if not parameters.get("use_dhcp"):
-    if not parameters.get("gateway"):
-        raise NonRecoverableError('If dhcp not used, gateway must be provided.')
-    if not parameters.get("static_ip"):
-        raise NonRecoverableError('If dhcp not used, static_ip must be provided.')
-if parameters.get("add_second_nic"):
-    if not parameters.get("use_dhcp2"):
-        if not parameters.get("static_ip2"):
-            raise NonRecoverableError('If dhcp not used, static_ip must be provided.')
+    if blank("static_ip"):
+        raise NonRecoverableError('Use DHCP is off: Static IP and CIDR prefix must be provided.')
+    if parameters.get("use_gateway") and blank("gateway"):
+        raise NonRecoverableError('Use Gateway is on: Gateway IP must be provided.')
+if parameters.get("add_second_nic") and not parameters.get("use_dhcp2"):
+    if blank("static_ip2"):
+        raise NonRecoverableError(
+            'Use DHCP on second NIC is off: Static IP and CIDR prefix for second NIC must be provided.')
 
 ctx.logger.debug(f'Generating inputs: {template}, {parameters}')
 

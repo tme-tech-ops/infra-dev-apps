@@ -21,22 +21,18 @@ dsl_definitions:
   factory_host_ip: &factory_host_ip
     get_attribute: [vm_info, vm_public_ip]
 
-  # Playbooks reach the VM through the DDPC Endpoint proxy (ECANS) resolved by
-  # vm_info, so the VM doesn't need to be reachable from the orchestrator. The
-  # plugin swaps ip/port for the proxy address at run time. Proxy addresses are
-  # reused, so host keys are not recorded.
+  # Playbooks reach the VM through the DDPC Endpoint proxy (eo-proxy), so the
+  # VM doesn't need to be reachable from the orchestrator. Each node resolves
+  # the proxy address right before its run (resolve_proxy_endpoint below);
+  # the plugin's own inventory_proxy_settings is not used (see the script).
+  # Proxy addresses are reused, so host keys are not recorded.
   vm_inventory: &vm_inventory
-    inventory_proxy_settings:
-      factory_host:
-        ip: { get_attribute: [vm, vm_details, name] }
-        port: 22
-        proxy_settings: { get_attribute: [vm_info, connection_proxy_settings] }
     sources:
       all:
         hosts:
           factory_host:
-            ansible_host: { get_attribute: [SELF, inventory_proxy_settings, factory_host, ip] }
-            ansible_port: { get_attribute: [SELF, inventory_proxy_settings, factory_host, port] }
+            ansible_host: { get_attribute: [SELF, proxy_host] }
+            ansible_port: { get_attribute: [SELF, proxy_port] }
             ansible_user: { get_input: vm_user_name }
             ansible_ssh_private_key_file:
               get_secret:
@@ -59,8 +55,9 @@ dsl_definitions:
     # attempt is enough.
     number_of_attempts: 2
 
-  # Variables shared by the stack playbooks (deploy, verify).
-  stack_run_data: &stack_run_data
+  # The stack settings: the non-secret part of stack_run_data, also compared
+  # by deploy_stack's drift check.
+  stack_settings: &stack_settings
     factory_site: { get_input: factory_site }
     factory_line: { get_input: factory_line }
     publish_interval: { get_input: publish_interval }
@@ -74,8 +71,34 @@ dsl_definitions:
     mqttx_web_port: { get_input: mqttx_web_port }
     bridge_port: { get_input: bridge_port }
     public_host: *factory_host_ip
+
+  # Variables shared by the stack playbooks (deploy, verify).
+  stack_run_data: &stack_run_data
+    <<: *stack_settings
     admin_username: { get_secret: [{ get_input: stack_admin_credentials }, username] }
     admin_password: { get_secret: [{ get_input: stack_admin_credentials }, password] }
+
+  # Resolves the Endpoint proxy address of the VM's SSH port into this node's
+  # runtime properties, just before a run (precreate, preupdate, prestop).
+  resolve_proxy_endpoint: &resolve_proxy_endpoint
+    implementation: iot_factory/scripts/proxy_endpoint.py
+    executor: central_deployment_agent
+    inputs:
+      service_tag: { get_environment_capability: ece_service_tag }
+      vm_name: { get_attribute: [vm, vm_details, name] }
+      port: 22
+
+  # check_drift for the Ansible nodes that have nothing to update (see the
+  # script): no drift, so a changed shared input doesn't reinstall them.
+  no_drift: &no_drift
+    implementation: iot_factory/scripts/no_drift.py
+    executor: central_deployment_agent
+
+  # The lifecycle operations every Ansible node here has: a fresh proxy
+  # address before install, and no drift (deploy_stack overrides check_drift).
+  vm_node_ops: &vm_node_ops
+    precreate: *resolve_proxy_endpoint
+    check_drift: *no_drift
 
 # Same playbook chain as the remote-host entry, run inside the DDPC VM.
 # Uninstall removes the VM, which removes Docker, the stack and any bridge, so
@@ -91,7 +114,7 @@ node_templates:
       playbook_path: iot_factory/playbooks/preflight.yaml
       # A failed check is final: fail fast instead of retrying.
       number_of_attempts: 1
-      run_data:
+      run_data: &preflight_run_data
         required_ports:
           - { get_input: mqtt_port }
           - { get_input: nodered_port }
@@ -100,6 +123,8 @@ node_templates:
           - { get_input: mqtt_ws_port }
           - { get_input: mqttx_web_port }
           - { get_input: bridge_port }
+    interfaces:
+      dell.interfaces.lifecycle: *vm_node_ops
     relationships:
       - type: dell.relationships.depends_on
         target: vm_info
@@ -110,6 +135,8 @@ node_templates:
     properties:
       <<: *ansible_common_properties
       playbook_path: iot_factory/playbooks/install_docker.yaml
+    interfaces:
+      dell.interfaces.lifecycle: *vm_node_ops
     relationships:
       - type: dell.relationships.depends_on
         target: preflight
@@ -117,13 +144,48 @@ node_templates:
   # Mosquitto, Node-RED, InfluxDB and Grafana under /opt/iot-factory.
   deploy_stack:
     type: dell.nodes.ansible.Executor
-    properties:
+    properties: &deploy_stack_properties
       <<: *ansible_common_properties
       playbook_path: iot_factory/playbooks/deploy_stack.yaml
       run_data: *stack_run_data
       sensitive_keys:
         - ansible_password
         - admin_password
+    interfaces:
+      dell.interfaces.lifecycle:
+        precreate: *resolve_proxy_endpoint
+        # Day 2. check_drift (iot_factory/scripts/stack_drift.py) compares the
+        # desired settings with the ones the last successful run applied.
+        # update runs preflight (a changed port must be free), deploy_stack
+        # with the new settings and verify_demo in one run
+        # (playbooks/update_stack.yaml), and postupdate records the settings
+        # as applied, as poststart does at install.
+        check_drift:
+          implementation: iot_factory/scripts/stack_drift.py
+          executor: central_deployment_agent
+          inputs:
+            action: check_drift
+            settings: *stack_settings
+        poststart:
+          implementation: iot_factory/scripts/stack_drift.py
+          executor: central_deployment_agent
+          inputs:
+            action: record
+            settings: *stack_settings
+        preupdate: *resolve_proxy_endpoint
+        update:
+          implementation: ansible.plugins_ansible.tasks.run
+          inputs:
+            <<: *deploy_stack_properties
+            playbook_path: iot_factory/playbooks/update_stack.yaml
+            run_data:
+              <<: [*stack_run_data, *preflight_run_data]
+        postupdate:
+          implementation: iot_factory/scripts/stack_drift.py
+          executor: central_deployment_agent
+          inputs:
+            action: record
+            settings: *stack_settings
     relationships:
       - type: dell.relationships.depends_on
         target: install_docker
@@ -139,6 +201,8 @@ node_templates:
       sensitive_keys:
         - ansible_password
         - admin_password
+    interfaces:
+      dell.interfaces.lifecycle: *vm_node_ops
     relationships:
       - type: dell.relationships.depends_on
         target: deploy_stack
@@ -167,6 +231,8 @@ node_templates:
       sensitive_keys:
         - ansible_password
         - bridge_password
+    interfaces:
+      dell.interfaces.lifecycle: *vm_node_ops
     relationships:
       - type: dell.relationships.depends_on
         target: verify_demo
@@ -203,6 +269,8 @@ node_templates:
       sensitive_keys:
         - ansible_password
         - hub_password
+    interfaces:
+      dell.interfaces.lifecycle: *vm_node_ops
     relationships:
       - type: dell.relationships.depends_on
         target: verify_demo
