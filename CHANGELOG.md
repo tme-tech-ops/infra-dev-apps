@@ -2,6 +2,23 @@
 
 All notable changes to this blueprint are recorded here.
 
+## 4.3.2 - unreleased
+
+- Fixed (IoT Smart Factory, all three blueprints): the Grafana dashboard
+  showed "No data" in every panel after a day or two. Its Line variable
+  listed lines with a 30-day `schema.tagValues` lookup filtered by site,
+  which scans all stored telemetry; once that took longer than Grafana's
+  30-second data source timeout, the variable came back empty and every
+  panel filtered on no line. Measured on EdgeOS 4.3 VMs after two days:
+  over 30 s (timed out); on a 4-core host 14 s. The Site and Line variables
+  now look back 1 hour (about 1 s), which loses nothing on a live dashboard.
+- Added (IoT Smart Factory): `stack_files_version` in the stack settings.
+  `deploy_stack`'s drift check compares settings only, so a revision that
+  changes only the stack's files was not detected; bumping this value (now
+  4.3.2) makes an update to the new revision re-run `deploy_stack`. Existing
+  4.2.0 deployments pick up the fixed dashboard by updating to 4.3.2.
+- Changed (IoT Smart Factory): version label 4.2.0 -> 4.3.2.
+
 ## 4.3.1 - unreleased
 
 compose_app review (Day-2 rules from 4.1–4.3; regression on the live

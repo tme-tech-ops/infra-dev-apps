@@ -80,8 +80,8 @@
      "type": "influxdb",
      "uid": "influxdb-iot"
     },
-    "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"site\", start: -30d)",
-    "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"site\", start: -30d)",
+    "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"site\", start: -1h)",
+    "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"site\", start: -1h)",
     "multi": true,
     "includeAll": true,
     "refresh": 2,
@@ -104,8 +104,8 @@
      "type": "influxdb",
      "uid": "influxdb-iot"
     },
-    "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"line\", predicate: (r) => contains(value: r.site, set: ${site:json}), start: -30d)",
-    "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"line\", predicate: (r) => contains(value: r.site, set: ${site:json}), start: -30d)",
+    "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"line\", predicate: (r) => contains(value: r.site, set: ${site:json}), start: -1h)",
+    "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"telemetry\", tag: \"line\", predicate: (r) => contains(value: r.site, set: ${site:json}), start: -1h)",
     "multi": true,
     "includeAll": true,
     "refresh": 2,
