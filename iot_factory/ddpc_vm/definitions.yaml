@@ -71,6 +71,10 @@ dsl_definitions:
     mqttx_web_port: { get_input: mqttx_web_port }
     bridge_port: { get_input: bridge_port }
     public_host: *factory_host_ip
+    # Version of the files the stack is built from (playbooks/files and
+    # playbooks/templates). Bump it whenever they change: the new value is
+    # drift, so updating a deployment to the new revision re-runs deploy_stack.
+    stack_files_version: "4.3.2"
 
   # Variables shared by the stack playbooks (deploy, verify).
   stack_run_data: &stack_run_data

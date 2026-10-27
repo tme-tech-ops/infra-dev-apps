@@ -569,7 +569,7 @@ These inputs can be changed with **Update Deployment** (all three entries): Tele
 
 How an update works:
 
-- **Drift check.** `deploy_stack` compares the desired settings with the ones its last successful run applied (`iot_factory/scripts/stack_drift.py`). Only a difference re-runs anything. The other nodes always report no drift (`iot_factory/scripts/no_drift.py`), so they are never reinstalled.
+- **Drift check.** `deploy_stack` compares the desired settings with the ones its last successful run applied (`iot_factory/scripts/stack_drift.py`). Only a difference re-runs anything. The settings include `stack_files_version`, which is bumped whenever the stack's files (`iot_factory/playbooks/files`, `iot_factory/playbooks/templates`) change, so updating a deployment to such a revision re-runs `deploy_stack` and installs the new files. The other nodes always report no drift (`iot_factory/scripts/no_drift.py`), so they are never reinstalled.
 - **One run.** On a difference, `deploy_stack`'s update runs `update_stack.yaml`: preflight (a changed port must be free), the deploy with the new settings (`docker compose` recreates only the containers whose settings changed), then verify_demo. The new settings are then recorded as applied. If the run fails, nothing is recorded, so the next update tries again.
 - **No change, or an Ansible setting only:** nothing runs on the host (about a minute).
 - **Accept Joins / Join A Hub Factory are set at install.** Their node instances exist only when the input was on at install, and a deployment update doesn't add or remove them. To start or stop accepting joins, or to join or leave a hub, reinstall the deployment (uninstall, then install with the new inputs).
