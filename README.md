@@ -69,13 +69,15 @@ Use it to:
 
 | Plugin | Imported as | Provides | Used by |
 |---|---|---|---|
-| **edge-plugin** | `>=3.3.33.0,<4.0.0.0` | `NativeEdgeVM`, `BinaryImage`, `NativeEdgeCompose`, `RegistryLogin` node types | simple_vm, iot_factory (DDPC VM), it_toolkit_compose, compose_app |
-| **utilities-plugin** | `>=3.2.3.0,<4.0.0.0` | `dell.nodes.keys.RSAKey` (SSH key pair), `dell.nodes.CloudInit.CloudConfig` | simple_vm, iot_factory (DDPC VM) |
+| **edge-plugin** | `>=3.3.25.0,<3.3.26.0` | `NativeEdgeVM`, `BinaryImage`, `NativeEdgeCompose`, `RegistryLogin` node types | simple_vm, iot_factory (DDPC VM), it_toolkit_compose, compose_app |
+| **utilities-plugin** | `>=3.1.4.0,<3.1.5.0` | `dell.nodes.keys.RSAKey` (SSH key pair), `dell.nodes.CloudInit.CloudConfig` | simple_vm, iot_factory (DDPC VM) |
 | **fabric-plugin** | `>=3.4.3.0,<4.0.0.0` | `run_script` over SSH through the eo-proxy | simple_vm, iot_factory (DDPC VM) |
 | **ansible-plugin** | `>=4.1.9.0,<5.0.0.0` | `dell.nodes.ansible.Executor` (playbooks over direct SSH, or through the eo-proxy) | iot_factory (all three entries) |
 | Script plugin (built in) | none | Python operations run on the deployment agent (`central_deployment_agent`) | simple_vm, iot_factory (both DDPC entries), it_toolkit_compose, compose_app |
 
-Plugins are imported in the entry files only (each `definitions.yaml` relies on them). The minimums are the versions DDPC 4.3.0.0 ships; older DDPC releases are not supported.
+Plugins are imported in the entry files only (each `definitions.yaml` relies on them).
+
+**DDPC 4.2.0.0 snapshot (branch `ddpc-4.2.0.0-snapshot`):** this branch targets DAP 2.0.0.1 with DDPC 4.2.0.0 Endpoints. The edge-plugin and utilities-plugin are pinned to the versions that DAP 2.0.0.1 ships (3.3.25.0 and 3.1.4.0), so a newer copy uploaded to the same orchestrator is not picked instead. DAP 2.0.0.1 does not ship the fabric-plugin: upload fabric-plugin 3.4.3.0 before uploading simple_vm or iot_factory_vm. The ansible-plugin 4.1.9.0 ships with DAP 2.0.0.1. For DAP 2.1.1.0 / DDPC 4.3.0.0, use `main` (release `rel-4.3.0.0`).
 
 ### Repository layout
 

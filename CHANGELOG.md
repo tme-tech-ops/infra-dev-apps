@@ -2,6 +2,26 @@
 
 All notable changes to this blueprint are recorded here.
 
+## ddpc-4.2.0.0-snapshot - unreleased (testing)
+
+DAP 2.0.0.1 / DDPC 4.2.0.0 compatibility branch, cut from 4.3.2. Field users on
+Dell-hosted DAP 2.0.0.1 could not deploy it_toolkit_compose or iot_factory_vm:
+the entries required edge-plugin >=3.3.33.0 and utilities-plugin >=3.2.3.0,
+which DAP 2.0.0.1 does not ship.
+
+- Changed (simple_vm, iot_factory_vm, it_toolkit_compose, compose_app): the
+  edge-plugin is pinned to 3.3.25.0 and the utilities-plugin to 3.1.4.0, the
+  versions DAP 2.0.0.1 ships. fabric-plugin 3.4.3.0 and ansible-plugin 4.1.9.0
+  are unchanged.
+- Docs: DAP 2.0.0.1 does not ship the fabric-plugin; upload it before
+  simple_vm or iot_factory_vm.
+- Tested 2026-10-29 on Dell-hosted DAP 2.0.0.1 with a Gateway 5200 on DDPC
+  4.2.0.0 (revision 4.3.2.1): it_toolkit_compose installed in 2 minutes (five
+  containers running) and iot_factory_vm in 22 minutes (VM on a bridge
+  segment, Ubuntu 24.04, telemetry verified). The nodes ran edge-plugin
+  3.3.25.0, utilities-plugin 3.1.4.0, fabric-plugin 3.4.3.0 and
+  ansible-plugin 4.1.9.0.
+
 ## 4.3.2 - unreleased
 
 - Fixed (IoT Smart Factory, all three blueprints): the Grafana dashboard

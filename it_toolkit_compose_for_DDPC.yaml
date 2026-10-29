@@ -11,7 +11,7 @@ description: >
 
 imports:
   - dell/types/types.yaml
-  - plugin:edge-plugin?version= >=3.3.33.0,<4.0.0.0
+  - plugin:edge-plugin?version= >=3.3.25.0,<3.3.26.0
   - site_it_toolkit/definitions.yaml
   - site_it_toolkit/inputs.yaml
   - site_it_toolkit/capabilities.yaml
